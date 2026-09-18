@@ -148,7 +148,8 @@ def combined_summary_formula(source_names: Iterable[str]) -> str:
         "provinceValues,MAP(keys,LAMBDA(k,INDEX(FILTER(provinces,vehicleKeys=k),1))),"
         "firstDates,MAP(keys,LAMBDA(k,MIN(FILTER(dates,vehicleKeys=k)))),"
         "lastDates,MAP(keys,LAMBDA(k,MAX(FILTER(dates,vehicleKeys=k)))),"
-        'monthCounts,MAP(keys,LAMBDA(k,COUNTUNIQUE(TEXT(FILTER(dates,vehicleKeys=k),"yyyy-mm")))),'
+        "monthCounts,MAP(keys,LAMBDA(k,COUNTUNIQUE(ARRAYFORMULA(TEXT("
+        'FILTER(dates,vehicleKeys=k),"yyyy-mm"))))),'
         "dayCounts,MAP(keys,LAMBDA(k,COUNTUNIQUE(FILTER(dates,vehicleKeys=k)))),"
         "recordCounts,MAP(keys,LAMBDA(k,ROWS(FILTER(vehicleKeys,vehicleKeys=k)))),"
         'allBuildings,MAP(keys,LAMBDA(k,IFERROR(TEXTJOIN(", ",TRUE,SORT(UNIQUE('
@@ -463,8 +464,12 @@ def verify_combined_values(values: list[list[object]], expected: CombinedStats) 
         status = str(row[10]).strip() if len(row) > 10 else ""
         if (first_date, last_date) != (stats.first_date, stats.last_date):
             raise RuntimeError(f"Combined date mismatch for {key}")
-        if counts != (stats.month_count, stats.day_count, stats.record_count):
-            raise RuntimeError(f"Combined count mismatch for {key}")
+        expected_counts = (stats.month_count, stats.day_count, stats.record_count)
+        if counts != expected_counts:
+            raise RuntimeError(
+                f"Combined count mismatch for {key}: "
+                f"expected {expected_counts}, got {counts}"
+            )
         if status != stats.status:
             raise RuntimeError(f"Combined status mismatch for {key}")
         latest = {
