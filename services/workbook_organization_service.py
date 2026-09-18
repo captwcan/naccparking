@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -550,9 +551,13 @@ class WorkbookOrganizer:
         reasons: list[str] = []
         car_values = controls[2].get("values", []) if len(controls) > 2 else []
         monthly_values = controls[3].get("values", []) if len(controls) > 3 else []
-        if _cell(car_values, 1, 0) != combined_summary_formula(source_names):
+        if not _formulas_equivalent(
+            _cell(car_values, 1, 0), combined_summary_formula(source_names)
+        ):
             reasons.append("CarSummary is not the all-month summary")
-        if _cell(monthly_values, 1, 0) != monthly_summary_formula():
+        if not _formulas_equivalent(
+            _cell(monthly_values, 1, 0), monthly_summary_formula()
+        ):
             reasons.append("MonthlyRanking is not the compact monthly summary")
 
         metadata = self.spreadsheet.fetch_sheet_metadata(
@@ -1247,3 +1252,12 @@ def _serial_date(value: object) -> date | None:
 
 def _escape(name: str) -> str:
     return name.replace("'", "''")
+
+
+def _formulas_equivalent(actual: object, expected: str) -> bool:
+    def normalize(value: object) -> str:
+        formula = str(value)
+        formula = re.sub(r"'([A-Za-z0-9_]+)'!", r"\1!", formula)
+        return re.sub(r"\b([A-Z]+2:[A-Z]+)\d+\b", r"\1", formula)
+
+    return normalize(actual) == normalize(expected)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from services.workbook_organization_service import (
+    _formulas_equivalent,
     VISIBLE_SHEETS,
     build_combined_stats,
     build_tab_organization_requests,
@@ -75,6 +76,11 @@ class WorkbookOrganizationTests(unittest.TestCase):
         self.assertNotIn("Backup_", formula)
         self.assertIn("VSTACK", formula)
         self.assertIn("TRIM", formula)
+
+    def test_formula_comparison_accepts_google_expanded_ranges(self):
+        expected = "=VSTACK(FILTER('RawData'!A2:A,'RawData'!A2:A<>\"\"))"
+        actual = '=VSTACK(FILTER(RawData!A2:A8056,RawData!A2:A8056<>""))'
+        self.assertTrue(_formulas_equivalent(actual, expected))
 
     def test_monthly_formula_is_compact_and_keeps_filter(self):
         formula = monthly_summary_formula()
