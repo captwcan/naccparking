@@ -45,7 +45,12 @@ def main() -> int:
             logger.info("Dry run completed. No data was modified.")
             return 0
         if not plan.needs_update:
-            logger.info("Workbook is already organized. No data was modified.")
+            result = organizer.verify(plan)
+            logger.info("Workbook is already organized. No summary data was modified.")
+            logger.info(
+                "Verified months: %s", ", ".join(map(str, result.verified_months))
+            )
+            logger.info("RawData A:M unchanged: %s", result.raw_data_unchanged)
             return 0
         if not args.yes and not confirm("Back up and organize the workbook?"):
             logger.info("Workbook organization cancelled")

@@ -642,15 +642,7 @@ class WorkbookOrganizer:
                 }
             )
 
-            self._wait_for_combined(plan.combined_stats)
-            verify_months = _verification_months(plan)
-            for month in verify_months:
-                self._set_selected_month(monthly_sheet.id, month)
-                self._set_display_mode(monthly_sheet.id, "ทั้งหมด")
-                self._wait_for_month(plan.month_stats[month])
-                self.logger.info("Verified monthly view: %s", month)
-            self._set_selected_month(monthly_sheet.id, plan.selected_month)
-            self._set_display_mode(monthly_sheet.id, plan.display_mode)
+            verify_months = self._verify_summary_views(plan, monthly_sheet)
 
             raw_after = self._raw_data_fingerprint()
             if raw_after != raw_before:
@@ -667,6 +659,29 @@ class WorkbookOrganizer:
             True,
             True,
         )
+
+    def verify(self, plan: WorkbookOrganizationPlan) -> WorkbookOrganizationResult:
+        raw_before = self._raw_data_fingerprint()
+        monthly_sheet = self.spreadsheet.worksheet(MONTHLY_SHEET)
+        verify_months = self._verify_summary_views(plan, monthly_sheet)
+        raw_after = self._raw_data_fingerprint()
+        if raw_after != raw_before:
+            raise RuntimeError("RawData A:M changed during workbook verification")
+        return WorkbookOrganizationResult(("", ""), verify_months, True, False)
+
+    def _verify_summary_views(self, plan, monthly_sheet) -> tuple[date, ...]:
+        self._wait_for_combined(plan.combined_stats)
+        verify_months = _verification_months(plan)
+        try:
+            for month in verify_months:
+                self._set_selected_month(monthly_sheet.id, month)
+                self._set_display_mode(monthly_sheet.id, "ทั้งหมด")
+                self._wait_for_month(plan.month_stats[month])
+                self.logger.info("Verified monthly view: %s", month)
+        finally:
+            self._set_selected_month(monthly_sheet.id, plan.selected_month)
+            self._set_display_mode(monthly_sheet.id, plan.display_mode)
+        return verify_months
 
     def _wait_for_combined(self, expected: CombinedStats) -> None:
         last_error: Exception | None = None
@@ -764,12 +779,7 @@ class WorkbookOrganizer:
 
 
 def _verification_months(plan: WorkbookOrganizationPlan) -> tuple[date, ...]:
-    result: list[date] = []
-    archive_months = [month for month in plan.months if month != plan.current_month]
-    if archive_months:
-        result.append(archive_months[0])
-    if plan.month_stats[plan.current_month].period_days:
-        result.append(plan.current_month)
+    result = [month for month in plan.months if plan.month_stats[month].period_days]
     if not result:
         raise RuntimeError("No source month has valid parking data")
     return tuple(result)
