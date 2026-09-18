@@ -30,3 +30,27 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           MODE: ${{ inputs.execute && '--execute --yes' || '--dry-run' }}
         run: python scripts/organize_workbook.py $MODE
+      - name: Prepare Streamlit smoke-test secrets
+        env:
+          GOOGLE_SPREADSHEET_URL: ${{ secrets.GOOGLE_SPREADSHEET_URL }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          import toml
+
+          secrets = {
+              "spreadsheet_url": os.environ["GOOGLE_SPREADSHEET_URL"],
+              "gcp_service_account": json.loads(
+                  os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]
+              ),
+          }
+          path = Path(".streamlit/secrets.toml")
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(toml.dumps(secrets), encoding="utf-8")
+          PY
+      - name: Smoke test Streamlit website
+        run: python scripts/smoke_test_app.py
