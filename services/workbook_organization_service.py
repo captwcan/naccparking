@@ -158,7 +158,7 @@ def combined_summary_formula(source_names: Iterable[str]) -> str:
         'FILTER(buildings,vehicleKeys=k,dates=lastd,buildings<>"")))) ,""))),'
         "streaks,MAP(keys,LAMBDA(k,LET(ds,SORT(UNIQUE(FILTER(dates,vehicleKeys=k)),1,FALSE),"
         "last,INDEX(ds,1),seq,SEQUENCE(ROWS(ds),1,last,-1),"
-        "IFERROR(MATCH(FALSE,ISNUMBER(MATCH(seq,ds,0)),0)-1,ROWS(ds))))),"
+        "IFERROR(MATCH(FALSE,ARRAYFORMULA(ISNUMBER(MATCH(seq,ds,0))),0)-1,ROWS(ds))))),"
         'statuses,ARRAYFORMULA(IF(streaks>=14,"แดงมาก",IF(streaks>=7,"เกิน 7 วัน",'
         'IF(streaks>=3,"เฝ้าดู","ปกติ")))),'
         "table,{keys,plateValues,provinceValues,firstDates,lastDates,monthCounts,"
@@ -471,7 +471,10 @@ def verify_combined_values(values: list[list[object]], expected: CombinedStats) 
                 f"expected {expected_counts}, got {counts}"
             )
         if status != stats.status:
-            raise RuntimeError(f"Combined status mismatch for {key}")
+            raise RuntimeError(
+                f"Combined status mismatch for {key}: "
+                f"expected {stats.status!r}, got {status!r}"
+            )
         latest = {
             value.strip()
             for value in str(row[9] if len(row) > 9 else "").split(",")
