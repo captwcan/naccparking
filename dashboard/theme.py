@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 
 THEME_PRESETS = {
@@ -29,8 +31,20 @@ def init_theme_state():
         st.session_state.ui_theme = "dark"
 
 
-def set_theme_from_toggle():
-    st.session_state.ui_theme = "dark" if st.session_state.dark_mode_toggle else "light"
+def toggle_theme():
+    st.session_state.ui_theme = "light" if is_dark_theme() else "dark"
+
+
+def render_theme_switch():
+    dark = is_dark_theme()
+    st.button(
+        "สว่าง" if dark else "มืด",
+        icon=":material/light_mode:" if dark else ":material/dark_mode:",
+        help="เปลี่ยนเป็นโหมดสว่าง" if dark else "เปลี่ยนเป็นโหมดมืด",
+        key="parking_theme_toggle",
+        on_click=toggle_theme,
+        width="content",
+    )
 
 
 def get_theme():
@@ -44,6 +58,11 @@ def is_dark_theme():
 def apply_theme_css():
     variables = ";".join(f"--{k.replace('_', '-')}: {v}" for k, v in get_theme().items())
     st.markdown("<style>:root{" + variables + ";--text-main:var(--text);--border-color:var(--border);--primary-color:var(--primary);}</style>" + SHARED_CSS, unsafe_allow_html=True)
+    # Use the native client theme as well as the app's layout tokens. Canvas
+    # tables and calendar popovers cannot be themed reliably with CSS alone.
+    script = Path(__file__).with_name("theme_sync.js").read_text(encoding="utf-8")
+    script = script.replace("__PARKING_THEME__", "dark" if is_dark_theme() else "light")
+    st.html(f"<script>{script}</script>", unsafe_allow_javascript=True)
 
 
 SHARED_CSS = """
@@ -53,6 +72,12 @@ html,body,input,textarea,button,select { font-family:'IBM Plex Sans Thai',sans-s
 .stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"] { background:var(--app-bg) !important; color:var(--text) !important; }
 [data-testid="stMainBlockContainer"] { max-width:1040px; padding:3.5rem 2rem 3rem; }
 [data-testid="stHeader"] { background:var(--app-bg) !important; }
+.parking-theme-sync [data-testid="stMainMenuPopover"] { visibility:hidden !important; }
+[data-testid="stThemeSwitcher"] { display:none; }
+.st-key-parking_header { flex-wrap:nowrap !important; align-items:flex-start !important; gap:.75rem !important; }
+.st-key-parking_header > [data-testid="stElementContainer"]:first-child { flex:1 1 0%; min-width:0; }
+.st-key-parking_header > [data-testid="stElementContainer"]:last-child { flex:0 0 auto; }
+.st-key-parking_theme_toggle button { min-height:44px; white-space:nowrap; }
 [data-testid="stSidebar"] { background:var(--sidebar-bg) !important; border-right:1px solid var(--border); }
 [data-testid="stSidebar"] h2 { font-size:1rem; }
 h1,h2,h3,h4,h5,h6,[data-testid="stMarkdownContainer"],[data-testid="stWidgetLabel"] { color:var(--text) !important; }
@@ -67,7 +92,11 @@ input::placeholder,textarea::placeholder { color:var(--text-muted) !important; -
 [role="listbox"],[role="option"],[data-baseweb="popover"] { background:var(--card-bg) !important; color:var(--text) !important; }
 [role="option"]:hover,[role="option"][aria-selected="true"] { background:var(--card-bg-alt) !important; }
 [data-testid="stSelectbox"] button,[data-testid="stSelectbox"] [role="combobox"],
-[data-testid="stSelectbox"] [role="group"] { background:var(--input-bg) !important; color:var(--text) !important; border-color:var(--border) !important; }
+[data-testid="stSelectbox"] [role="group"],
+[data-testid="stMultiSelect"] button,[data-testid="stMultiSelect"] [role="group"],
+[data-testid="stDateInput"] > div,[data-testid="stDateInputField"],
+[data-testid="stDateInputCalendarButton"] { background:var(--input-bg) !important; color:var(--text) !important; border-color:var(--border) !important; }
+[data-testid="stDateInputField"] span { color:var(--text) !important; }
 button[kind="secondary"],[data-testid="stBaseButton-secondary"] { background:var(--card-bg) !important; border:1px solid var(--border) !important; color:var(--text) !important; }
 button[kind="secondary"]:hover { background:var(--card-bg-alt) !important; border-color:var(--text-muted) !important; }
 button[kind="primary"],[data-testid="stBaseButton-primary"] { background:var(--primary) !important; color:var(--button-text) !important; border:1px solid var(--primary) !important; font-weight:600; }
@@ -75,6 +104,10 @@ button[kind="primary"]:hover:not(:disabled) { filter:brightness(.95); }
 button[kind="primary"] p,button[kind="secondary"] p { color:inherit !important; }
 button[kind="primary"]:disabled { opacity:.45; cursor:not-allowed; }
 [data-testid="stButton"] button { min-height:44px; border-radius:8px; padding:.55rem .9rem; }
+[data-testid="stButtonGroup"] [data-variant="segmented_control"] { min-height:44px; background:var(--card-bg) !important; color:var(--text) !important; border-color:var(--border) !important; }
+[data-testid="stButtonGroup"] [data-variant="segmented_control"] [data-testid="stMarkdownContainer"] { color:inherit !important; }
+[data-testid="stButtonGroup"] [data-variant="segmented_control"]:hover { background:var(--card-bg-alt) !important; }
+[data-testid="stButtonGroup"] [data-variant="segmented_control"][data-selected] { background:var(--card-bg-alt) !important; border-color:var(--primary) !important; box-shadow:inset 0 -2px 0 var(--primary); }
 button:focus-visible,input:focus-visible,a:focus-visible { outline:3px solid var(--primary) !important; outline-offset:3px; }
 [data-testid="stExpander"] { border-color:var(--border); border-radius:10px; background:var(--card-bg); }
 [data-testid="stExpander"] summary { min-height:44px; color:var(--text); }

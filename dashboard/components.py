@@ -10,7 +10,7 @@ import streamlit as st
 from dashboard.data_service import BUILDING_COL, DATE_COL, PROVINCE_COL
 from dashboard.metrics import THAI_MONTH_BY_NUMBER, compute_kpis, month_options
 from services.parking_domain import bangkok_now
-from dashboard.theme import is_dark_theme
+from dashboard.theme import get_theme
 
 
 COUNT_COL = "จำนวนรายการ"
@@ -106,11 +106,11 @@ def render_daily_counts_chart(daily_df: pd.DataFrame, height: int = 280) -> None
                 alt.Tooltip(f"{count_col}:Q", title="จำนวนรายการ", format=","),
             ],
         )
-        .properties(height=height)
+        .properties(height=height, background=get_theme()["card_bg"])
         .configure_axis(labelColor=_chart_text(), titleColor=_chart_text(), gridColor=_chart_grid())
         .configure_view(stroke=None)
     )
-    st.altair_chart(chart, width="stretch")
+    st.altair_chart(chart, width="stretch", theme=None)
 
 
 def render_horizontal_bar_chart(
@@ -147,11 +147,11 @@ def render_horizontal_bar_chart(
                 alt.Tooltip(f"{count_col}:Q", title="จำนวนรายการ", format=","),
             ],
         )
-        .properties(height=max(height, 28 * len(plot_df)))
+        .properties(height=max(height, 28 * len(plot_df)), background=get_theme()["card_bg"])
         .configure_axis(labelColor=_chart_text(), titleColor=_chart_text(), gridColor=_chart_grid())
         .configure_view(stroke=None)
     )
-    st.altair_chart(chart, width="stretch")
+    st.altair_chart(chart, width="stretch", theme=None)
 
 
 def reset_filter_state(prefix):
@@ -269,12 +269,12 @@ def _count_column(df: pd.DataFrame) -> str:
 
 
 def _chart_text() -> str:
-    return "#F4F7FA" if is_dark_theme() else "#0F172A"
+    return get_theme()["text"]
 
 
 def _chart_grid() -> str:
-    return "rgba(167,176,188,0.18)" if is_dark_theme() else "rgba(82,97,115,0.18)"
+    return get_theme()["border"]
 
 
 def _chart_accent() -> str:
-    return "#00A7C8" if is_dark_theme() else "#2C5364"
+    return get_theme()["primary"]

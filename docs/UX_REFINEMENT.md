@@ -35,3 +35,15 @@ Regression tests cover save/cancel, real count-change feedback, manual summary r
 Visual inspection was performed in Edge at a 440px mobile viewport. The compact row and equal-width buttons were verified in the rendered UI. The regression suite also exercises light-mode state, 40-row and 100-row drafts. Pixel verification is limited to the observed 440px mobile viewport.
 
 Local rollback: restore the Full Release source ZIP. The release updates application source only; it requires no parking-data or schema migration.
+
+## Theme consistency follow-up
+
+The former toggle changed application CSS while Streamlit retained a single light native theme. Native widgets, calendar overlays, canvas dataframes and charts could therefore disagree with the selected mode.
+
+Both native theme variants now use the same palette as the application tokens in `.streamlit/config.toml`. The visible theme button is at the upper right of the header on both pages. It selects Streamlit's native theme in the current browser session without reloading the page or rewriting server config. Drafts survive switching themes and pages.
+
+`dashboard/theme_sync.js` uses Streamlit 1.66.1's native theme menu controls, identified by `stMainMenuButton` and `stMainMenuItem-theme-Light` / `stMainMenuItem-theme-Dark`. The package is pinned to that version. Recheck those controls, both modes, calendars and canvas tables when upgrading Streamlit. The regular native menu theme choices are hidden so the application has one theme control.
+
+References: [native light/dark configuration](https://docs.streamlit.io/develop/concepts/configuration/theming), [Streamlit 1.66.1 theme selection](https://github.com/streamlit/streamlit/blob/1.66.1/frontend/app/src/components/MainMenu/themeSection.ts), [trusted JavaScript in st.html](https://docs.streamlit.io/develop/api-reference/text/st.html).
+
+Follow-up checks cover desktop dark/light widgets and charts, a dark calendar overlay and raw-data canvas table, and the 390px mobile header and registration form. No production parking records are written by these checks.

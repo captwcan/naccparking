@@ -30,7 +30,7 @@ class FrontendWorkflowTests(unittest.TestCase):
         self.plates()[0].input('กก1234'); self.app.run()
         self.button('เพิ่มทะเบียน').click(); self.app.run()
         self.assertEqual(len(self.plates()), 2)
-        self.app.toggle[0].set_value(False); self.app.run()
+        self.button('สว่าง').click(); self.app.run()
         self.assertEqual(self.plates()[0].value, 'กก1234')
         self.assertEqual(self.app.session_state.ui_theme, 'light')
         self.assertFalse(self.app.exception)
@@ -42,6 +42,18 @@ class FrontendWorkflowTests(unittest.TestCase):
         self.button('ยืนยันล้างรายการ').click(); self.app.run()
         self.assertEqual(len(self.plates()), 1)
         self.assertEqual(self.plates()[0].value, '')
+        self.assertFalse(self.app.exception)
+
+    def test_theme_button_is_outside_sidebar_and_shared_across_pages(self):
+        self.plates()[0].input('กก1234'); self.app.run()
+        self.assertNotIn('parking_theme_toggle', [item.key for item in self.app.sidebar.button])
+        self.button('สว่าง').click(); self.app.run()
+        self.app.switch_page('pages/dashboard.py').run()
+        self.assertEqual(self.app.session_state.ui_theme, 'light')
+        self.button('มืด').click(); self.app.run()
+        self.app.switch_page('app_parking.py').run()
+        self.assertEqual(self.app.session_state.ui_theme, 'dark')
+        self.assertEqual(self.plates()[0].value, 'กก1234')
         self.assertFalse(self.app.exception)
 
     def test_duplicate_variants_disable_save(self):
