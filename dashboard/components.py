@@ -163,14 +163,15 @@ def render_filter_bar(df: pd.DataFrame, key_prefix: str) -> dict[str, object]:
     if df.empty:
         return {"buildings": [], "provinces": [], "year": None, "month": None, "date_range": None}
 
-    st.button("ล้างตัวกรอง", key=f"{key_prefix}_reset", on_click=reset_filter_state, args=(key_prefix,))
     building_options = sorted(df[BUILDING_COL].dropna().astype(str).unique())
     province_options = sorted(df[PROVINCE_COL].dropna().astype(str).unique())
     months = month_options(df)
     month_labels = ["ทั้งหมด"] + [label for _, _, label in months]
 
-    st.markdown('<div class="dash-filter-title">ตัวกรองข้อมูล</div>', unsafe_allow_html=True)
-    col_building, col_province, col_month, col_range, col_refresh = st.columns([1.25, 1.1, 1, 1.35, 0.75])
+    with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
+        st.markdown('<div class="dash-filter-title">ตัวกรองข้อมูล</div>', unsafe_allow_html=True)
+        st.button("ล้างตัวกรอง", key=f"{key_prefix}_reset", on_click=reset_filter_state, args=(key_prefix,))
+    col_building, col_province, col_month, col_range, col_refresh = st.columns([1.25, 1.1, 1, 1.35, 0.75], vertical_alignment="bottom")
     with col_building:
         buildings = st.multiselect("อาคาร", building_options, key=f"{key_prefix}_buildings")
     with col_province:
@@ -188,7 +189,6 @@ def render_filter_bar(df: pd.DataFrame, key_prefix: str) -> dict[str, object]:
             key=f"{key_prefix}_date_range",
         )
     with col_refresh:
-        st.write("")
         refresh = st.button("รีเฟรช", key=f"{key_prefix}_refresh", width="stretch")
 
     selected_year = None
