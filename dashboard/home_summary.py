@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from services.parking_domain import bangkok_now
 import html
 from datetime import date, datetime
 
@@ -25,7 +26,7 @@ def get_today_records(df: pd.DataFrame, today: date | None = None) -> pd.DataFra
     if df is None or df.empty:
         return pd.DataFrame(columns=list(df.columns) if df is not None else [])
 
-    today = today or datetime.now().date()
+    today = today or bangkok_now().date()
     date_col = _find_column(df, DATE_CANDIDATES)
     if date_col is None:
         return df.iloc[0:0].copy()
@@ -75,7 +76,10 @@ def render_home_mini_dashboard(
         return
 
     cards = get_today_building_counts(df, buildings)
-    _render_html(_build_dashboard_markup(cards, theme_attr=theme_attr))
+    total = next(card["count"] for card in cards if card["kind"] == "total")
+    _render_html(f'<div class="parking-summary"><div>ยอดบันทึกวันนี้<br><small>รวมทุกอาคาร · เวลาไทย</small></div><div><strong>{total:,}</strong> รายการ</div></div>')
+    with st.expander("ดูยอดแยกตามอาคาร", expanded=False):
+        _render_html(_build_dashboard_markup(cards, theme_attr=theme_attr))
 
 
 def _build_dashboard_markup(cards: list[dict[str, object]], theme_attr: str = "") -> str:

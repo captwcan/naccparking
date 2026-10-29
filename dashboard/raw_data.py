@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from services.parking_domain import bangkok_now
 
 import pandas as pd
 import streamlit as st
@@ -38,6 +38,10 @@ def render(df: pd.DataFrame) -> None:
         key="raw_show_system_cols",
     )
 
+    if filtered.empty:
+        components.render_empty("ไม่พบรายการที่ตรงกับตัวกรอง ลองปรับช่วงเวลาหรือล้างตัวกรอง")
+        return
+    st.caption(f"ช่วงข้อมูล {filtered['วันที่ตรวจพบ'].min():%d/%m/%Y} – {filtered['วันที่ตรวจพบ'].max():%d/%m/%Y} · {len(filtered):,} รายการ")
     try:
         display_df = prepare_display_dataframe(filtered, include_system_columns=show_system_cols)
         if not display_df.columns.is_unique:
@@ -45,7 +49,7 @@ def render(df: pd.DataFrame) -> None:
         st.caption(f"จำนวนรายการหลังกรอง: {len(display_df):,} รายการ")
         st.dataframe(
             display_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config={
                 "วันที่": st.column_config.TextColumn("วันที่"),
@@ -65,15 +69,16 @@ def render(df: pd.DataFrame) -> None:
             st.exception(exc)
         return
 
+    st.markdown("**ส่งออกรายการที่แสดงอยู่**")
     col_csv, col_excel = st.columns(2)
-    today_key = date.today().strftime("%Y-%m-%d")
+    today_key = bangkok_now().date().strftime("%Y-%m-%d")
     with col_csv:
         st.download_button(
             "ดาวน์โหลด CSV",
             data=to_csv_bytes(display_df),
             file_name=f"nacc_parking_export_{today_key}.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
         )
     with col_excel:
         try:
@@ -83,7 +88,7 @@ def render(df: pd.DataFrame) -> None:
                 data=excel_bytes,
                 file_name=f"nacc_parking_export_{today_key}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
+                width="stretch",
             )
         except Exception as exc:
             st.warning(f"ยังไม่สามารถสร้าง Excel ได้: {exc}")

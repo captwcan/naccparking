@@ -9,6 +9,7 @@ from dashboard.data_service import (
     BUILDING_COL,
     DATE_COL,
     NORMALIZED_PLATE_COL,
+    VEHICLE_KEY_COL,
     OVERNIGHT_COL,
     PLATE_COL,
     PROVINCE_COL,
@@ -93,10 +94,10 @@ def compute_kpis(df: pd.DataFrame) -> dict[str, object]:
     overnight_df = df[df[OVERNIGHT_COL] == True]
     return {
         "total_records": int(len(df)),
-        "unique_vehicles": int(df[NORMALIZED_PLATE_COL].nunique()),
+        "unique_vehicles": int(df[VEHICLE_KEY_COL].nunique()),
         "building_count": int(df[BUILDING_COL].replace("", pd.NA).dropna().nunique()),
         "overnight_count": int(len(overnight_df)),
-        "overnight_vehicle_count": int(overnight_df[NORMALIZED_PLATE_COL].nunique()),
+        "overnight_vehicle_count": int(overnight_df[VEHICLE_KEY_COL].nunique()),
         "busiest_day": day_counts.index[0] if not day_counts.empty else None,
         "busiest_day_count": int(day_counts.iloc[0]) if not day_counts.empty else 0,
         "top_building": building_counts.index[0] if not building_counts.empty else "-",
@@ -151,7 +152,7 @@ def summarize_by_building(df: pd.DataFrame) -> pd.DataFrame:
 
     work = df.copy()
     building_col = find_existing_column(work, [BUILDING_COL, "building", "สถานที่", "location", "building_name"])
-    plate_col = find_existing_column(work, [NORMALIZED_PLATE_COL, PLATE_COL, "plate", "license_plate", "vehicle_key"])
+    plate_col = find_existing_column(work, [VEHICLE_KEY_COL, NORMALIZED_PLATE_COL, PLATE_COL, "plate", "license_plate", "vehicle_key"])
     overnight_col = find_existing_column(work, [OVERNIGHT_COL, "ค้างคืน", "overnight"])
 
     if building_col is None:
@@ -232,7 +233,8 @@ def build_week_options(year: int, month: int) -> list[dict[str, object]]:
 
 def month_options(df: pd.DataFrame) -> list[tuple[int, int, str]]:
     if df.empty:
-        today = date.today()
+        from services.parking_domain import bangkok_now
+        today = bangkok_now().date()
         return [(today.year, today.month, f"{THAI_MONTH_BY_NUMBER[today.month]} {today.year}")]
 
     parsed = pd.to_datetime(df[DATE_COL], errors="coerce").dropna()
@@ -246,29 +248,36 @@ def month_options(df: pd.DataFrame) -> list[tuple[int, int, str]]:
 def vehicle_options(df: pd.DataFrame, query: str, limit: int = 50) -> list[str]:
     if df.empty or not query.strip():
         return []
-    normalized_query = query.strip().upper().replace(" ", "")
-    candidates = df[[PLATE_COL, NORMALIZED_PLATE_COL]].drop_duplicates()
-    mask = (
-        candidates[PLATE_COL].astype(str).str.contains(query.strip(), case=False, na=False)
-        | candidates[NORMALIZED_PLATE_COL].astype(str).str.contains(normalized_query, case=False, na=False)
+    from services.parking_domain import normalize_plate
+    normalized_query = normalize_plate(query)
+    candidates = df[[PLATE_COL, PROVINCE_COL, NORMALIZED_PLATE_COL, VEHICLE_KEY_COL]].drop_duplicates(VEHICLE_KEY_COL)
+    mask = candidates[PLATE_COL].str.contains(query.strip(), case=False, regex=False, na=False) | candidates[NORMALIZED_PLATE_COL].str.contains(normalized_query, case=False, regex=False, na=False)
+    return candidates.loc[mask, VEHICLE_KEY_COL].head(limit).tolist()
+
+
+def vehicle_counts(df: pd.DataFrame, limit: int = 10) -> pd.DataFrame:
+    return (
+        df.groupby([NORMALIZED_PLATE_COL, PROVINCE_COL])
+        .size()
+        .reset_index(name="จำนวนครั้ง")
+        .sort_values("จำนวนครั้ง", ascending=False, kind="stable")
+        .head(limit)
+        .rename(columns={NORMALIZED_PLATE_COL: "ทะเบียนรถมาตรฐาน"})
     )
-    return candidates.loc[mask, PLATE_COL].head(limit).tolist()
 
 
 def vehicle_profile(df: pd.DataFrame, plate: str) -> tuple[dict[str, object], pd.DataFrame]:
     if df.empty or not plate:
         return {}, pd.DataFrame()
+    if plate in set(df[VEHICLE_KEY_COL]):
+        selected_key = plate
+    else:
+        matches = df.loc[df[PLATE_COL] == plate, VEHICLE_KEY_COL].unique()
+        if len(matches) != 1:
+            return {}, pd.DataFrame()
+        selected_key = matches[0]
+    history = df[df[VEHICLE_KEY_COL] == selected_key].sort_values(DATE_COL).reset_index(drop=True)
 
-    selected_norm = df.loc[df[PLATE_COL] == plate, NORMALIZED_PLATE_COL]
-    if selected_norm.empty:
-        return {}, pd.DataFrame()
-
-    normalized_plate = selected_norm.iloc[0]
-    history = (
-        df[df[NORMALIZED_PLATE_COL] == normalized_plate]
-        .sort_values(DATE_COL)
-        .reset_index(drop=True)
-    )
     if history.empty:
         return {}, history
 

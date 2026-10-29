@@ -9,6 +9,7 @@ from datetime import date, datetime
 from typing import Iterable
 from zoneinfo import ZoneInfo
 
+from services.google_sheets_service import refresh_report_data
 from services.archive_service import parse_parking_datetime
 from services.monthly_ranking_service import (
     ARCHIVE_PATTERN,
@@ -628,6 +629,7 @@ class WorkbookOrganizer:
                     )
                 }
             )
+            refresh_report_data(self.spreadsheet, plan.source_names)
             requests = build_summary_update_requests(
                 car_sheet.id,
                 monthly_sheet.id,
@@ -785,8 +787,6 @@ class WorkbookOrganizer:
 
 def _verification_months(plan: WorkbookOrganizationPlan) -> tuple[date, ...]:
     result = [month for month in plan.months if plan.month_stats[month].period_days]
-    if not result:
-        raise RuntimeError("No source month has valid parking data")
     return tuple(result)
 
 

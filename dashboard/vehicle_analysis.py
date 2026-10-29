@@ -38,14 +38,14 @@ def render(df: pd.DataFrame) -> None:
     _render_timeline(history)
 
     components.section_title("ประวัติการจอด")
-    st.dataframe(prepare_display_dataframe(history), use_container_width=True, hide_index=True)
+    st.dataframe(prepare_display_dataframe(history), width="stretch", hide_index=True)
 
     components.section_title("วันที่เข้าข่ายจอดค้าง")
     overnight = history[history[OVERNIGHT_COL] == True]
     if overnight.empty:
         components.render_empty("ยังไม่พบวันที่เข้าข่ายจอดค้าง")
     else:
-        st.dataframe(prepare_display_dataframe(overnight), use_container_width=True, hide_index=True)
+        st.dataframe(prepare_display_dataframe(overnight), width="stretch", hide_index=True)
 
 
 def _render_profile(profile: dict[str, object]) -> None:

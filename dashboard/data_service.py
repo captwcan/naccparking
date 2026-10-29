@@ -10,7 +10,8 @@ import gspread
 import pandas as pd
 import streamlit as st
 from google.oauth2.service_account import Credentials
-from services.google_sheets_service import read_parking_values
+from services.google_sheets_service import read_parking_values, read_all_parking_values
+from services.parking_domain import bangkok_now, vehicle_key
 
 
 DATE_COL = "วันที่ตรวจพบ"
@@ -130,7 +131,7 @@ def prepare_dashboard_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     else:
         clean_source = prepared[PLATE_COL]
     prepared[NORMALIZED_PLATE_COL] = clean_source.map(normalize_plate)
-    prepared[VEHICLE_KEY_COL] = prepared[NORMALIZED_PLATE_COL]
+    prepared[VEHICLE_KEY_COL] = [vehicle_key(p, v) for p, v in zip(prepared[PLATE_COL], prepared[PROVINCE_COL])]
     prepared[YEAR_COL] = parsed_dates.dt.year
     prepared[MONTH_COL] = parsed_dates.dt.month
     prepared[YEAR_MONTH_COL] = parsed_dates.dt.strftime("%Y-%m")
@@ -144,12 +145,12 @@ def prepare_dashboard_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         by=[NORMALIZED_PLATE_COL, DATE_COL, BUILDING_COL, PROVINCE_COL],
         kind="stable",
     ).reset_index(drop=True)
-    prepared[PREV_SEEN_COL] = prepared.groupby(NORMALIZED_PLATE_COL)[DATE_COL].shift(1)
-    prepared[NEXT_SEEN_COL] = prepared.groupby(NORMALIZED_PLATE_COL)[DATE_COL].shift(-1)
+    prepared[PREV_SEEN_COL] = prepared.groupby(VEHICLE_KEY_COL)[DATE_COL].shift(1)
+    prepared[NEXT_SEEN_COL] = prepared.groupby(VEHICLE_KEY_COL)[DATE_COL].shift(-1)
     prepared[GAP_DAYS_COL] = _date_gap(prepared[PREV_SEEN_COL], prepared[DATE_COL])
     prepared["next_gap_days"] = _date_gap(prepared[DATE_COL], prepared[NEXT_SEEN_COL])
 
-    date_counts = prepared.groupby(NORMALIZED_PLATE_COL)[DATE_COL].transform("nunique")
+    date_counts = prepared.groupby(VEHICLE_KEY_COL)[DATE_COL].transform("nunique")
     prepared[REPEAT_COL] = date_counts > 1
 
     status_match = _status_indicates_overnight(prepared)
@@ -192,7 +193,7 @@ def init_dashboard_connection():
 @st.cache_data(ttl=300, show_spinner=False)
 def load_raw_dashboard_data() -> pd.DataFrame:
     sheet = init_dashboard_connection()
-    values = read_parking_values(sheet)
+    values = read_all_parking_values(sheet.spreadsheet)
     return dataframe_from_sheet_values(values)
 
 
@@ -219,7 +220,7 @@ def load_archive_months(months: Iterable[tuple[int, int]]) -> pd.DataFrame:
 def load_prepared_dashboard_data() -> tuple[pd.DataFrame, pd.DataFrame, datetime]:
     raw = load_raw_dashboard_data()
     prepared = prepare_dashboard_dataframe(raw)
-    return raw, prepared, datetime.now().astimezone()
+    return raw, prepared, bangkok_now()
 
 
 def get_dashboard_data() -> DashboardDataResult:
@@ -240,6 +241,7 @@ def get_dashboard_data() -> DashboardDataResult:
 def clear_dashboard_cache() -> None:
     load_raw_dashboard_data.clear()
     load_prepared_dashboard_data.clear()
+    load_archive_month.clear()
 
 
 def dataframe_from_sheet_values(values: list[list[object]]) -> pd.DataFrame:
@@ -352,4 +354,3 @@ def _normalize_header(value: object) -> str:
 
 def _padded_row(row: list[object], width: int) -> list[object]:
     return list(row) + [""] * (width - len(row))
-

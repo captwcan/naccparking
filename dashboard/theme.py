@@ -13,7 +13,7 @@ THEME_PRESETS: dict[str, dict[str, str]] = {
         "border": "#303846",
         "primary": "#00a7c8",
         "input_bg": "#282933",
-        "button_text": "#ffffff",
+        "button_text": "#06212b",
         "card_shadow": "none",
         "total_border": "rgba(0,167,200,0.5)",
     },
@@ -56,237 +56,56 @@ def is_dark_theme() -> bool:
 
 def apply_theme_css() -> None:
     t = get_theme()
-    st.markdown(
-        f"""
+    variables = ";".join(f"--{name.replace('_', '-')}: {value}" for name, value in t.items())
+    st.markdown("<style>:root{" + variables + ";--text-main: var(--text);--border-color: var(--border);--primary-color: var(--primary);}</style>" + SHARED_CSS, unsafe_allow_html=True)
+
+
+SHARED_CSS = """
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap');
-
-    html, body, [class*="css"] {{
-        font-family: 'Kanit', sans-serif !important;
-    }}
-
-    :root {{
-        --app-bg: {t["app_bg"]};
-        --sidebar-bg: {t["sidebar_bg"]};
-        --card-bg: {t["card_bg"]};
-        --card-bg-alt: {t["card_bg_alt"]};
-        --text-main: {t["text"]};
-        --text-muted: {t["text_muted"]};
-        --border-color: {t["border"]};
-        --primary-color: {t["primary"]};
-        --input-bg: {t["input_bg"]};
-        --button-text: {t["button_text"]};
-        --card-shadow: {t["card_shadow"]};
-        --total-border: {t["total_border"]};
-    }}
-
-    /* ── App background ── */
-    .stApp,
-    [data-testid="stAppViewContainer"],
-    [data-testid="stMain"] {{
-        background: var(--app-bg) !important;
-    }}
-
-    /* ── Sidebar ── */
-    [data-testid="stSidebar"] {{
-        background: var(--sidebar-bg) !important;
-    }}
-
-    [data-testid="stSidebar"] * {{
-        color: var(--text-main);
-    }}
-
-    section[data-testid="stSidebar"] div[data-testid="stExpander"] {{
-        background: var(--sidebar-bg) !important;
-        border: 1px solid var(--border-color) !important;
-    }}
-
-    section[data-testid="stSidebar"] a[href*="dashboard"] {{
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 0.45rem 0.65rem;
-        background: rgba(44,83,100,0.08);
-        text-decoration: none;
-        font-weight: 500;
-        transition: all 0.2s ease;
-    }}
-
-    section[data-testid="stSidebar"] a[href*="dashboard"]:hover {{
-        background: rgba(44,83,100,0.16);
-        border-color: rgba(44,83,100,0.55);
-    }}
-
-    /* ── Header banner — fixed dark gradient (branding) ── */
-    .header-container {{
-        background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
-        padding: 2.5rem 2rem;
-        border-radius: 12px;
-        text-align: center;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.35);
-        margin-bottom: 2rem;
-        margin-top: 0.5rem;
-    }}
-
-    .header-title {{
-        font-size: 2.2rem;
-        font-weight: 600;
-        margin: 0;
-        letter-spacing: 0.5px;
-        color: #ffffff !important;
-    }}
-
-    .header-subtitle {{
-        font-size: 1.1rem;
-        font-weight: 300;
-        color: #e0e0e0 !important;
-        margin-top: 0.5rem;
-    }}
-
-    /* ── Section titles ── */
-    .section-title {{
-        font-size: 1.25rem;
-        font-weight: 600;
-        margin-bottom: 1rem;
-        padding-bottom: 0.5rem;
-        color: var(--text-main) !important;
-        border-bottom: 2px solid var(--border-color);
-    }}
-
-    /* ── Buttons ── */
-    div.stButton > button:first-child {{
-        font-family: 'Kanit', sans-serif;
-        font-size: 1.1rem;
-        font-weight: 500;
-        border-radius: 8px;
-        padding: 0.5rem 1rem;
-        transition: all 0.3s ease;
-    }}
-
-    /* ── Inputs / selects ── */
-    input, textarea, select {{
-        background-color: var(--input-bg) !important;
-        color: var(--text-main) !important;
-        border-color: var(--border-color) !important;
-    }}
-
-    div[data-baseweb="select"] > div {{
-        background-color: var(--input-bg) !important;
-        color: var(--text-main) !important;
-        border-color: var(--border-color) !important;
-    }}
-
-    /* ── Typography ── */
-    h1, h2, h3, h4, h5, h6 {{
-        color: var(--text-main) !important;
-    }}
-
-    hr {{
-        border-color: var(--border-color) !important;
-    }}
-
-    /* ── Mini summary dashboard ── */
-    .mini-dashboard-shell {{
-        margin: -0.35rem 0 1.55rem;
-    }}
-
-    .mini-dashboard-title {{
-        color: var(--text-main);
-        font-size: 0.98rem;
-        font-weight: 600;
-        margin: 0 0 0.55rem;
-    }}
-
-    .mini-dashboard-wrap {{
-        width: 100%;
-        max-width: 100%;
-        overflow-x: hidden;
-        box-sizing: border-box;
-    }}
-
-    .mini-dashboard-grid {{
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: clamp(4px, 1.5vw, 10px);
-        width: 100%;
-        max-width: 100%;
-        box-sizing: border-box;
-    }}
-
-    .mini-stat-card {{
-        min-width: 0;
-        width: 100%;
-        min-height: clamp(82px, 24vw, 112px);
-        box-sizing: border-box;
-        border-radius: clamp(8px, 2vw, 14px);
-        border: 1px solid var(--border-color);
-        background: var(--card-bg);
-        box-shadow: var(--card-shadow);
-        padding: clamp(8px, 2.2vw, 18px);
-        overflow: hidden;
-    }}
-
-    .mini-stat-card--total {{
-        border-color: var(--total-border);
-        background: var(--card-bg-alt);
-    }}
-
-    .mini-stat-top {{
-        display: flex;
-        align-items: center;
-        gap: clamp(3px, 1vw, 7px);
-        min-width: 0;
-    }}
-
-    .mini-stat-icon {{
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: clamp(18px, 5vw, 28px);
-        height: clamp(18px, 5vw, 28px);
-        border-radius: 6px;
-        color: var(--primary-color);
-        background: rgba(44,83,100,0.12);
-        font-size: clamp(11px, 3vw, 16px);
-        flex: 0 0 auto;
-    }}
-
-    .mini-stat-title {{
-        color: var(--text-muted);
-        font-size: clamp(10px, 2.6vw, 14px);
-        line-height: 1.25;
-        font-weight: 500;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        min-width: 0;
-    }}
-
-    .mini-stat-value {{
-        color: var(--text-main);
-        font-size: clamp(20px, 6vw, 34px);
-        line-height: 1.05;
-        font-weight: 800;
-        margin-top: clamp(6px, 1.4vw, 10px);
-    }}
-
-    .mini-stat-subtitle {{
-        color: var(--text-muted);
-        font-size: clamp(9px, 2.4vw, 13px);
-        line-height: 1.2;
-        margin-top: clamp(2px, 0.7vw, 4px);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }}
-
-    .mini-dashboard-error {{
-        border: 1px solid rgba(239,68,68,0.35);
-        border-radius: 10px;
-        padding: 0.85rem 1rem;
-        color: #dc2626;
-        background: rgba(239,68,68,0.08);
-    }}
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
+html, body, .stApp, input, textarea, button, select { font-family: 'Noto Sans Thai', sans-serif; }
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] { background: var(--app-bg) !important; color: var(--text) !important; }
+[data-testid="stMainBlockContainer"] { max-width: 1120px; padding: 1.6rem 2rem 3rem; }
+[data-testid="stSidebar"] { background: var(--sidebar-bg) !important; }
+h1,h2,h3,h4,h5,h6,p,label, [data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p, [data-testid="stMarkdownContainer"] { color: var(--text) !important; }
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p { color: var(--text-muted) !important; }
+input, textarea, [data-baseweb="select"] > div, [data-baseweb="popover"] [role="listbox"] { background: var(--input-bg) !important; color: var(--text) !important; border-color: var(--border) !important; }
+[role="option"] { color: var(--text) !important; background: var(--input-bg); }
+input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .8; }
+button { min-height: 44px; border-radius: 10px !important; color: var(--text) !important; }
+button[kind="primary"], [data-testid="stBaseButton-primary"] { background: var(--primary) !important; border-color: var(--primary) !important; color: var(--button-text) !important; font-weight: 600; }
+button[kind="primary"] p { color: var(--button-text) !important; }
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--primary) !important; outline-offset: 3px; }
+[data-testid="stVerticalBlockBorderWrapper"] > div { border-color: var(--border) !important; }
+.section-title { font-size: 1.05rem; font-weight: 650; color: var(--text) !important; margin: .9rem 0 .5rem; }
+.parking-header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.6rem; margin:0 0 .6rem; }
+.parking-brand { font-size:.75rem; font-weight:700; letter-spacing:.13em; color:var(--primary); }
+.parking-title { font-size:clamp(1.35rem, 3.5vw, 2rem); font-weight:700; line-height:1.5; color:var(--text); }
+.parking-date { font-size:.85rem; color:var(--text-muted); }
+.parking-summary { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.85rem 1rem; border:1px solid var(--border); border-radius:12px; background:var(--card-bg); color:var(--text); }
+.parking-summary strong { font-size:1.45rem; color:var(--primary); }
+.parking-summary small { color:var(--text-muted); }
+.parking-nav { display:inline-block; padding:.5rem .75rem; color:var(--primary) !important; text-decoration:none; border-radius:8px; }
+.mini-dashboard-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.65rem; }
+.mini-stat-card { background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:.8rem; min-width:0; }
+.mini-stat-top { display:flex; align-items:center; gap:.5rem; }
+.mini-stat-icon { color:var(--primary); }
+.mini-stat-title, .mini-stat-subtitle { color:var(--text-muted); font-size:.8rem; overflow-wrap:anywhere; }
+.mini-stat-value { color:var(--text); font-size:1.5rem; font-weight:650; margin:.3rem 0; }
+.mini-stat-card--total { border-color:var(--primary); }
+div[class*="st-key-vehicle_row_"] { background:var(--card-bg); border-radius:12px; }
+div[class*="st-key-vehicle_row_"] [data-testid="stHorizontalBlock"] { align-items:end; }
+.dash-hero { padding:1rem !important; margin-bottom:.8rem !important; }
+.dash-hero h1 { font-size:1.65rem !important; }
+.dash-kpi-card, .dash-card { min-height:0 !important; }
+@media(max-width:640px) {
+ [data-testid="stMainBlockContainer"] { padding:1rem .9rem 2rem; }
+ .parking-title { font-size:1.3rem; }
+ .mini-dashboard-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .parking-summary { align-items:start; }
+ .dash-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+ div[class*="st-key-vehicle_row_"] [data-testid="stHorizontalBlock"] { flex-wrap:wrap; gap:.5rem; }
+ div[class*="st-key-vehicle_row_"] [data-testid="stColumn"] { min-width:0 !important; flex:1 1 100% !important; width:100% !important; }
+}
 </style>
-""",
-        unsafe_allow_html=True,
-    )
+"""

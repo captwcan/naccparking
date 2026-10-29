@@ -53,8 +53,8 @@ def render(df) -> None:
             value.strftime("%d/%m/%Y") if hasattr(value, "strftime") else str(value)
             for value in matrix_display.index
         ]
-        st.dataframe(matrix_display, use_container_width=True, height=360)
+        st.dataframe(matrix_display, width="stretch", height=360)
 
     components.section_title("รายการล่าสุด 20 รายการ")
     latest = filtered.sort_values(DATE_COL, ascending=False).head(20)
-    st.dataframe(prepare_display_dataframe(latest), use_container_width=True, hide_index=True)
+    st.dataframe(prepare_display_dataframe(latest), width="stretch", hide_index=True)
