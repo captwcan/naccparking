@@ -6,7 +6,7 @@ import pandas as pd
 from dashboard import components, overview, period_analysis, raw_data, vehicle_analysis
 from dashboard.data_service import clear_dashboard_cache, get_dashboard_data
 from dashboard.styles import apply_dashboard_styles
-from dashboard.theme import init_theme_state, is_dark_theme, set_theme_from_toggle
+from dashboard.theme import init_theme_state, is_dark_theme, render_theme_switch
 
 
 st.set_page_config(
@@ -49,16 +49,13 @@ if st.sidebar.button("รีเฟรชข้อมูล", width="stretch"):
     st.rerun()
 st.sidebar.markdown("---")
 result = get_dashboard_data()
-header_content, header_theme = st.columns([4, 1], vertical_alignment="center")
-with header_content:
+with st.container(key="parking_header", horizontal=True, horizontal_alignment="distribute", vertical_alignment="top"):
     components.render_hero(
         "ประวัติและแดชบอร์ด",
         "ตรวจสอบทะเบียนย้อนหลัง วิเคราะห์การจอด และส่งออกรายงาน",
         result.loaded_at,
     )
-with header_theme:
-    st.session_state.dark_mode_toggle = is_dark_theme()
-    st.toggle("โหมดกลางคืน", key="dark_mode_toggle", on_change=set_theme_from_toggle)
+    render_theme_switch()
 with st.container(horizontal=True, key="parking_navigation", gap="xsmall"):
     st.page_link("app_parking.py", label="บันทึกทะเบียน", icon=":material/edit_note:")
     st.page_link("pages/dashboard.py", label="ประวัติและแดชบอร์ด", icon=":material/space_dashboard:")

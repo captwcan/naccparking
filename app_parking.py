@@ -10,7 +10,7 @@ import re
 from services.parking_domain import bangkok_now, vehicle_key
 from dashboard.data_service import clear_dashboard_cache
 from dashboard.home_summary import render_home_mini_dashboard
-from dashboard.theme import apply_theme_css, init_theme_state, is_dark_theme, set_theme_from_toggle
+from dashboard.theme import apply_theme_css, init_theme_state, is_dark_theme, render_theme_switch
 from parking_analysis import summarize_long_parkers
 from report_generator import (
     build_detailed_report,
@@ -443,10 +443,9 @@ if 'last_saved_rows' not in st.session_state:
 init_vehicle_rows()
 
 # ---- HEADER ----
-with st.container(key="parking_header"):
+with st.container(key="parking_header", horizontal=True, horizontal_alignment="distribute", vertical_alignment="top"):
     st.markdown('<div class="parking-brand"><span class="parking-monogram">P</span> NACC PARKING <span class="parking-workspace-label">/ ส่วนงานรักษาความปลอดภัย</span></div><h1 class="parking-title">บันทึกรถค้างอาคาร</h1>', unsafe_allow_html=True)
-st.session_state.dark_mode_toggle = is_dark_theme()
-st.sidebar.toggle("โหมดกลางคืน", key="dark_mode_toggle", on_change=set_theme_from_toggle)
+    render_theme_switch()
 
 with st.container(horizontal=True, key="parking_navigation", gap="xsmall"):
     st.page_link("app_parking.py", label="บันทึกทะเบียน", icon=":material/edit_note:")
