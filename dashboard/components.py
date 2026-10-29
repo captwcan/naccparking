@@ -9,6 +9,7 @@ import streamlit as st
 
 from dashboard.data_service import BUILDING_COL, DATE_COL, PROVINCE_COL
 from dashboard.metrics import THAI_MONTH_BY_NUMBER, compute_kpis, month_options
+from services.parking_domain import bangkok_now
 from dashboard.theme import is_dark_theme
 
 
@@ -53,7 +54,7 @@ def render_kpi_cards(df: pd.DataFrame) -> None:
     kpis = compute_kpis(df)
     cards = [
         ("▦", "จำนวนรายการทั้งหมด", f"{kpis['total_records']:,}", "รายการหลังกรอง"),
-        ("▦", "ทะเบียนรถไม่ซ้ำ", f"{kpis['unique_vehicles']:,}", "นับจากทะเบียนมาตรฐาน"),
+        ("▦", "ทะเบียนรถไม่ซ้ำ", f"{kpis['unique_vehicles']:,}", "แยกทะเบียนและจังหวัด"),
         ("▦", "อาคารที่มีข้อมูล", f"{kpis['building_count']:,}", "อาคารไม่ซ้ำ"),
         ("▦", "รายการเข้าข่ายค้างคืน", f"{kpis['overnight_count']:,}", f"{kpis['overnight_vehicle_count']:,} ทะเบียน"),
         (
@@ -109,7 +110,7 @@ def render_daily_counts_chart(daily_df: pd.DataFrame, height: int = 280) -> None
         .configure_axis(labelColor=_chart_text(), titleColor=_chart_text(), gridColor=_chart_grid())
         .configure_view(stroke=None)
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
 
 def render_horizontal_bar_chart(
@@ -150,13 +151,19 @@ def render_horizontal_bar_chart(
         .configure_axis(labelColor=_chart_text(), titleColor=_chart_text(), gridColor=_chart_grid())
         .configure_view(stroke=None)
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
+
+
+def reset_filter_state(prefix):
+    for suffix in ("buildings", "provinces", "month", "date_range", "search"):
+        st.session_state.pop(f"{prefix}_{suffix}", None)
 
 
 def render_filter_bar(df: pd.DataFrame, key_prefix: str) -> dict[str, object]:
     if df.empty:
         return {"buildings": [], "provinces": [], "year": None, "month": None, "date_range": None}
 
+    st.button("ล้างตัวกรอง", key=f"{key_prefix}_reset", on_click=reset_filter_state, args=(key_prefix,))
     building_options = sorted(df[BUILDING_COL].dropna().astype(str).unique())
     province_options = sorted(df[PROVINCE_COL].dropna().astype(str).unique())
     months = month_options(df)
@@ -182,7 +189,7 @@ def render_filter_bar(df: pd.DataFrame, key_prefix: str) -> dict[str, object]:
         )
     with col_refresh:
         st.write("")
-        refresh = st.button("รีเฟรช", key=f"{key_prefix}_refresh", use_container_width=True)
+        refresh = st.button("รีเฟรช", key=f"{key_prefix}_refresh", width="stretch")
 
     selected_year = None
     selected_month = None
@@ -191,6 +198,8 @@ def render_filter_bar(df: pd.DataFrame, key_prefix: str) -> dict[str, object]:
 
     if isinstance(selected_range, tuple) and len(selected_range) == 2:
         date_range = selected_range
+    elif isinstance(selected_range, tuple):
+        date_range = (selected_range[0], selected_range[0]) if selected_range else None
     else:
         date_range = (selected_range, selected_range)
 
@@ -208,9 +217,9 @@ def month_year_controls(df: pd.DataFrame, key_prefix: str) -> tuple[int, int]:
     months = month_options(df)
     year_values = sorted({year for year, _, _ in months}, reverse=True)
     if not year_values:
-        today = date.today()
+        today = bangkok_now().date()
         year_values = [today.year]
-    current_month = date.today().month
+    current_month = bangkok_now().date().month
 
     col_year, col_month = st.columns(2)
     with col_year:

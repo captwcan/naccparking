@@ -25,10 +25,11 @@ from dashboard.metrics import build_week_options, compute_kpis, filter_dataframe
 
 
 class DashboardDataServiceTests(unittest.TestCase):
+    @patch("dashboard.data_service.read_all_parking_values")
     @patch("dashboard.data_service.init_dashboard_connection")
-    def test_dashboard_reads_only_parking_input_columns(self, init_connection):
+    def test_dashboard_reads_only_parking_input_columns(self, init_connection, read_all):
         sheet = init_connection.return_value
-        sheet.get.return_value = [
+        read_all.return_value = [
             ["วันที่ตรวจพบ", "อาคาร", "", ""],
             ["2026-07-01", "อาคาร 1", "กก1", "กทม"],
         ]
@@ -37,7 +38,7 @@ class DashboardDataServiceTests(unittest.TestCase):
         result = load_raw_dashboard_data()
 
         self.assertEqual(len(result), 1)
-        sheet.get.assert_called_once_with("A1:D")
+        read_all.assert_called_once_with(sheet.spreadsheet)
         load_raw_dashboard_data.clear()
 
     def test_live_rawdata_blank_plate_and_province_headers_use_verified_schema(self):

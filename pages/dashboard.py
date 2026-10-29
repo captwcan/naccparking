@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import streamlit as st
+import pandas as pd
 
 from dashboard import components, overview, period_analysis, raw_data, vehicle_analysis
 from dashboard.data_service import clear_dashboard_cache, get_dashboard_data
 from dashboard.styles import apply_dashboard_styles
-from dashboard.theme import init_theme_state, is_dark_theme
+from dashboard.theme import init_theme_state, is_dark_theme, set_theme_from_toggle
 
 
 st.set_page_config(
@@ -17,6 +18,8 @@ st.set_page_config(
 
 
 init_theme_state()
+st.session_state.dark_mode_toggle = is_dark_theme()
+st.toggle("โหมดกลางคืน", key="dark_mode_toggle", on_change=set_theme_from_toggle)
 apply_dashboard_styles(is_dark_theme())
 
 
@@ -43,21 +46,19 @@ def _render_section(error_message: str, renderer, data) -> None:
 
 st.sidebar.page_link("app_parking.py", label="› กลับหน้าบันทึกข้อมูล")
 st.sidebar.markdown("---")
-if st.sidebar.button("รีเฟรชข้อมูล", use_container_width=True):
+if st.sidebar.button("รีเฟรชข้อมูล", width="stretch"):
     clear_dashboard_cache()
     st.rerun()
 st.sidebar.markdown("---")
-st.sidebar.markdown("**เมนูแดชบอร์ด**")
-for section_key, section_label in DASHBOARD_SECTIONS.items():
-    is_active = st.session_state.dashboard_section == section_key
-    if st.sidebar.button(
-        section_label,
-        key=f"dashboard_nav_{section_key}",
-        use_container_width=True,
-        type="primary" if is_active else "secondary",
-    ):
-        st.session_state.dashboard_section = section_key
-        st.rerun()
+st.page_link("app_parking.py", label="กลับไปบันทึกทะเบียน", icon="✍️")
+st.session_state.dashboard_section = st.segmented_control(
+    "เมนูประวัติและรายงาน",
+    options=list(DASHBOARD_SECTIONS),
+    format_func=lambda value: DASHBOARD_SECTIONS[value].replace("› ", ""),
+    default=st.session_state.dashboard_section,
+    selection_mode="single",
+    key="dashboard_section_selector",
+) or "overview"
 
 result = get_dashboard_data()
 components.render_hero(
@@ -69,8 +70,15 @@ components.render_hero(
 if result.error:
     components.render_error(result.error)
 elif result.prepared.empty:
-    components.render_empty("ยังไม่มีข้อมูลที่พร้อมแสดงผล หรือวันที่ใน Sheet parse ไม่ได้")
+    if result.raw.empty:
+        components.render_empty("ยังไม่มีรายการบันทึก เริ่มเพิ่มทะเบียนได้ที่หน้าบันทึกข้อมูล")
+    else:
+        components.render_empty("พบข้อมูลในชีท แต่รูปแบบวันที่หรือทะเบียนยังไม่พร้อมแสดงผล กรุณาติดต่อผู้ดูแล")
 else:
+    invalid_rows = int(pd.to_datetime(result.raw["วันที่ตรวจพบ"], errors="coerce").isna().sum())
+    if invalid_rows:
+        st.warning(f"มี {invalid_rows} รายการที่รูปแบบวันที่ไม่ถูกต้อง จึงไม่นำมาคำนวณ")
+    st.caption(f"ข้อมูลพร้อมแสดงผล {len(result.prepared):,} รายการ · รวมประวัติย้อนหลัง")
     selected_section = st.session_state.dashboard_section
     if selected_section == "overview":
         _render_section("ไม่สามารถแสดงผลภาพรวมแดชบอร์ดได้", overview.render, result.prepared)

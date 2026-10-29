@@ -14,6 +14,7 @@ from dashboard.metrics import (
     filter_dataframe,
     summarize_by_building,
     top_counts,
+    vehicle_counts,
 )
 
 
@@ -77,7 +78,7 @@ def _render_daily(df: pd.DataFrame) -> None:
             components.render_horizontal_bar_chart(top_counts(day_df, PROVINCE_COL, 10), PROVINCE_COL, height=280)
 
     components.section_title("รายการรถทั้งหมดของวันนั้น")
-    st.dataframe(prepare_display_dataframe(day_df), use_container_width=True, hide_index=True)
+    st.dataframe(prepare_display_dataframe(day_df), width="stretch", hide_index=True)
 
 
 def _render_weekly(df: pd.DataFrame) -> None:
@@ -107,24 +108,17 @@ def _render_weekly(df: pd.DataFrame) -> None:
     col_building, col_province, col_plate = st.columns(3)
     with col_building:
         components.section_title("Top อาคาร")
-        st.dataframe(top_counts(week_df, BUILDING_COL, 10), use_container_width=True, hide_index=True)
+        st.dataframe(top_counts(week_df, BUILDING_COL, 10), width="stretch", hide_index=True)
     with col_province:
         components.section_title("Top จังหวัด")
-        st.dataframe(top_counts(week_df, PROVINCE_COL, 10), use_container_width=True, hide_index=True)
+        st.dataframe(top_counts(week_df, PROVINCE_COL, 10), width="stretch", hide_index=True)
     with col_plate:
         components.section_title("ทะเบียนที่พบซ้ำ")
         if NORMALIZED_PLATE_COL not in week_df.columns:
             components.render_empty("ไม่มีข้อมูลทะเบียนสำหรับสรุป")
         else:
-            repeats = (
-                week_df.groupby(NORMALIZED_PLATE_COL)
-                .size()
-                .reset_index(name="จำนวนครั้ง")
-                .sort_values("จำนวนครั้ง", ascending=False)
-                .head(10)
-                .rename(columns={NORMALIZED_PLATE_COL: "ทะเบียนรถมาตรฐาน"})
-            )
-            st.dataframe(repeats, use_container_width=True, hide_index=True)
+            repeats = vehicle_counts(week_df)
+            st.dataframe(repeats, width="stretch", hide_index=True)
 
 
 def _render_monthly(df: pd.DataFrame) -> None:
@@ -152,4 +146,4 @@ def _render_monthly(df: pd.DataFrame) -> None:
     if summary_df.empty:
         components.render_empty("ไม่พบข้อมูลสำหรับสรุปตามอาคาร")
     else:
-        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        st.dataframe(summary_df, width="stretch", hide_index=True)

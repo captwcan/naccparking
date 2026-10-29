@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import threading
+import uuid
+from services.parking_domain import vehicle_key
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -64,46 +67,114 @@ def read_parking_values(worksheet) -> list[list[object]]:
     return worksheet.get(PARKING_INPUT_RANGE)
 
 
-def append_parking_rows(worksheet, rows: list[list[object]]):
-    """Append to the A:D parking table even when formula tables exist to its right."""
-    return worksheet.append_rows(rows, table_range=PARKING_INPUT_RANGE)
+def read_source_with_ids(worksheet):
+    """Avoid fetching the expensive calculated columns E:M on every write."""
+    source = worksheet.get("A1:D")
+    ids = worksheet.get("N1:N")
+    result = []
+    for index in range(max(len(source), len(ids))):
+        row = list(source[index][:4]) if index < len(source) else []
+        row += [""] * (13 - len(row))
+        row.append(ids[index][0] if index < len(ids) and ids[index] else "")
+        result.append(row)
+    return result
 
 
-def batch_delete_rows(worksheet, row_numbers: Iterable[int]) -> None:
-    """Delete all requested rows with one Sheets batchUpdate request."""
-    numbers = sorted(set(int(number) for number in row_numbers))
-    if not numbers:
-        return
-    if numbers[0] <= 1:
+WRITE_LOCK = threading.RLock()
+
+
+def append_parking_rows(worksheet, rows):
+    """Write source cells and immutable IDs atomically without touching formulas."""
+    with WRITE_LOCK:
+        existing = read_source_with_ids(worksheet)
+        seen = {(str(r[0]), vehicle_key(r[2], r[3])) for r in existing[1:] if len(r) >= 4 and r[0]}
+        for row in rows:
+            key = (str(row[0]), vehicle_key(row[2], row[3]))
+            if key in seen:
+                raise ValueError("พบทะเบียนซ้ำในวันเดียวกัน กรุณารีเฟรชข้อมูล")
+            seen.add(key)
+        last = max((i for i, row in enumerate(existing, 1) if any(row[:4]) or (len(row) > 13 and row[13])), default=1)
+        ids = [str(uuid.uuid4()) for _ in rows]
+        if last + len(rows) > worksheet.row_count:
+            worksheet.add_rows(last + len(rows) - worksheet.row_count)
+        requests = []
+        for offset, (row, record_id) in enumerate(zip(rows, ids)):
+            for column, values in [(0, row[:4]), (13, [record_id])]:
+                requests.append({"updateCells": {"start": {"sheetId": worksheet.id, "rowIndex": last + offset, "columnIndex": column}, "rows": [{"values": [{"userEnteredValue": _user_entered_value(v)} for v in values]}], "fields": "userEnteredValue"}})
+        if requests:
+            worksheet.spreadsheet.batch_update({"requests": requests})
+        return {"updates": {"updatedRange": f"'{worksheet.title}'!A{last+1}:D{last+len(rows)}"}, "record_ids": ids}
+
+
+def cancel_parking_records(worksheet, batch):
+    with WRITE_LOCK:
+        ids = {item.get("record_id") for item in batch}
+        if not ids or None in ids:
+            raise ValueError("รายการเก่าไม่มีรหัสอ้างอิง กรุณาให้ผู้ดูแลตรวจสอบ")
+        values = read_source_with_ids(worksheet)
+        requests = []
+        found_ids = set()
+        for index, row in enumerate(values[1:], 1):
+            if len(row) > 13 and row[13] in ids and any(row[:4]):
+                if row[13] in found_ids:
+                    raise ValueError("พบรหัสรายการซ้ำ กรุณาให้ผู้ดูแลตรวจสอบ")
+                found_ids.add(row[13])
+                expected = next(item for item in batch if item["record_id"] == row[13])
+                if row[:4] != [expected[k] for k in ("date", "building", "plate", "province")]:
+                    raise ValueError("ข้อมูลรายการถูกแก้ไขแล้ว กรุณารีเฟรช")
+                requests.append({"repeatCell": {"range": {"sheetId": worksheet.id, "startRowIndex": index, "endRowIndex": index+1, "startColumnIndex": 0, "endColumnIndex": 4}, "cell": {}, "fields": "userEnteredValue"}})
+        if found_ids != ids:
+            raise ValueError("ไม่พบรายการครบชุด อาจถูกยกเลิกหรือย้ายไปข้อมูลย้อนหลังแล้ว กรุณารีเฟรช")
+        if requests:
+            worksheet.spreadsheet.batch_update({"requests": requests})
+        return len(requests)
+
+
+def batch_delete_rows(worksheet, row_numbers):
+    """Compatibility helper: clear A:D only; never delete formula-bearing rows."""
+    numbers = sorted(set(int(n) for n in row_numbers))
+    if numbers and numbers[0] <= 1:
         raise ValueError("Refusing to delete the header row")
+    requests = [{"repeatCell": {"range": {"sheetId": worksheet.id, "startRowIndex": n-1, "endRowIndex": n, "startColumnIndex": 0, "endColumnIndex": 4}, "cell": {}, "fields": "userEnteredValue"}} for n in numbers]
+    if requests:
+        worksheet.spreadsheet.batch_update({"requests": requests})
 
-    ranges: list[tuple[int, int]] = []
-    start = end = numbers[0]
-    for number in numbers[1:]:
-        if number == end + 1:
-            end = number
-        else:
-            ranges.append((start, end))
-            start = end = number
-    ranges.append((start, end))
 
-    worksheet.spreadsheet.batch_update(
-        {
-            "requests": [
-                {
-                    "deleteDimension": {
-                        "range": {
-                            "sheetId": worksheet.id,
-                            "dimension": "ROWS",
-                            "startIndex": start_row - 1,
-                            "endIndex": end_row,
-                        }
-                    }
-                }
-                for start_row, end_row in reversed(ranges)
-            ]
-        }
-    )
+def read_all_parking_values(spreadsheet):
+    names = [ws.title for ws in spreadsheet.worksheets() if ws.title == "RawData" or ws.title.startswith("Archive_")]
+    response = spreadsheet.values_batch_get([f"'{_escape_sheet_name(name)}'!A1:D" for name in names])
+    result = [["วันที่ตรวจพบ", "อาคาร", "ทะเบียนรถ", "จังหวัด"]]
+    for item in response.get("valueRanges", []):
+        for row in item.get("values", [])[1:]:
+            row = list(row) + [""] * (4-len(row))
+            if any(row[:4]):
+                result.append(row[:4])
+    return result
+
+
+def read_buildings(spreadsheet, defaults):
+    try:
+        values = spreadsheet.worksheet("Settings").get("A2:A")
+    except gspread.WorksheetNotFound:
+        # Initialization happens once under the shared writer lock.
+        with WRITE_LOCK:
+            try:
+                sheet = spreadsheet.worksheet("Settings")
+            except gspread.WorksheetNotFound:
+                sheet = spreadsheet.add_worksheet(title="Settings", rows=1000, cols=2)
+                sheet.update(values=[["อาคาร"]]+[[x] for x in defaults], range_name="A1", value_input_option="RAW")
+            values = sheet.get("A2:A")
+    return [str(row[0]).strip() for row in values if row and str(row[0]).strip()]
+
+
+def write_buildings(spreadsheet, buildings):
+    cleaned = list(dict.fromkeys(str(x).strip() for x in buildings if str(x).strip()))
+    with WRITE_LOCK:
+        sheet = spreadsheet.worksheet("Settings")
+        old = sheet.get("A2:A")
+        rows = [{"values": [{"userEnteredValue": {"stringValue": cleaned[i]}}] if i < len(cleaned) else [{}]} for i in range(max(len(old), len(cleaned)))]
+        if rows:
+            spreadsheet.batch_update({"requests": [{"updateCells": {"start": {"sheetId": sheet.id, "rowIndex": 1, "columnIndex": 0}, "rows": rows, "fields": "userEnteredValue"}}]})
 
 
 class GoogleSheetsService:
@@ -270,7 +341,8 @@ class GoogleSheetsService:
                             "rows": update_rows,
                             "fields": "userEnteredValue",
                         }
-                    }
+                    },
+                    {"updateCells": {"start": {"sheetId": sheet_id, "rowIndex": 1, "columnIndex": 13}, "rows": [{"values": [{"userEnteredValue": _user_entered_value(row[13])} if len(row) > 13 and row[13] else {}]} for row in rows] + [{"values": [{}]} for _ in range(target_count-len(rows))], "fields": "userEnteredValue"}}
                 ]
             }
         )
@@ -325,3 +397,18 @@ def _column_letter(number: int) -> str:
         number, remainder = divmod(number - 1, 26)
         result = chr(65 + remainder) + result
     return result
+
+
+
+def report_data_formula(names):
+    blank = '{' + ','.join(['""'] * 13) + '}'
+    parts = [f'IFERROR(FILTER(\'{_escape_sheet_name(n)}\'!A2:M,\'{_escape_sheet_name(n)}\'!A2:A<>""),{blank})' for n in names]
+    return '=IFERROR(LET(raw,VSTACK(' + ','.join(parts) + '),valid,FILTER(raw,INDEX(raw,,1)<>""),{ARRAYFORMULA(IFERROR(DATEVALUE(INDEX(valid,,1)),INDEX(valid,,1))),CHOOSECOLS(valid,2,3,4,5,6,7,8,9,10,11,12),ARRAYFORMULA(IFERROR(DATEVALUE(INDEX(valid,,1)),INDEX(valid,,1)))}),"")'
+
+
+def refresh_report_data(spreadsheet, names):
+    try:
+        sheet = spreadsheet.worksheet('ReportData')
+    except gspread.WorksheetNotFound:
+        sheet = spreadsheet.add_worksheet(title='ReportData', rows=50000, cols=13)
+    spreadsheet.batch_update({'requests': [{'updateCells': {'start': {'sheetId': sheet.id, 'rowIndex': 1, 'columnIndex': 0}, 'rows': [{'values': [{'userEnteredValue': {'formulaValue': report_data_formula(names)}}]}], 'fields': 'userEnteredValue'}}, {'updateSheetProperties': {'properties': {'sheetId': sheet.id, 'hidden': True}, 'fields': 'hidden'}}]})

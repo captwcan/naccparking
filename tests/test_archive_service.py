@@ -148,14 +148,14 @@ class ArchivePlanningTests(unittest.TestCase):
 class GoogleSheetsServiceTests(unittest.TestCase):
     def test_parking_append_is_scoped_to_input_columns(self):
         worksheet = Mock()
-        rows = [["2026-08-02", "อาคาร 8", "กก 1234", "กรุงเทพมหานคร"]]
-
-        append_parking_rows(worksheet, rows)
-
-        worksheet.append_rows.assert_called_once_with(
-            rows,
-            table_range="A1:D",
-        )
+        worksheet.get.side_effect = [[["date", "building", "plate", "province"]], [["record_id"]]]
+        worksheet.row_count = 1000
+        worksheet.id = 42
+        worksheet.title = "RawData"
+        result = append_parking_rows(worksheet, [["2026-08-02", "อาคาร 8", "กก 1234", "กรุงเทพมหานคร"]])
+        requests = worksheet.spreadsheet.batch_update.call_args.args[0]["requests"]
+        self.assertEqual([r["updateCells"]["start"]["columnIndex"] for r in requests], [0, 13])
+        self.assertEqual(len(result["record_ids"]), 1)
 
     def test_parking_read_excludes_formula_columns(self):
         worksheet = Mock()
@@ -166,38 +166,15 @@ class GoogleSheetsServiceTests(unittest.TestCase):
         self.assertEqual(result, [["header"]])
         worksheet.get.assert_called_once_with("A1:D")
 
-    def test_delete_rows_uses_one_batch_in_descending_ranges(self):
+    def test_delete_rows_preserves_formulas(self):
         worksheet = Mock()
         worksheet.id = 42
-
-        batch_delete_rows(worksheet, [5, 6, 9])
-
-        worksheet.spreadsheet.batch_update.assert_called_once_with(
-            {
-                "requests": [
-                    {
-                        "deleteDimension": {
-                            "range": {
-                                "sheetId": 42,
-                                "dimension": "ROWS",
-                                "startIndex": 8,
-                                "endIndex": 9,
-                            }
-                        }
-                    },
-                    {
-                        "deleteDimension": {
-                            "range": {
-                                "sheetId": 42,
-                                "dimension": "ROWS",
-                                "startIndex": 4,
-                                "endIndex": 6,
-                            }
-                        }
-                    },
-                ]
-            }
-        )
+        batch_delete_rows(worksheet, [2, 5])
+        requests = worksheet.spreadsheet.batch_update.call_args.args[0]["requests"]
+        self.assertEqual(len(requests), 2)
+        for request in requests:
+            self.assertEqual(request["repeatCell"]["range"]["endColumnIndex"], 4)
+            self.assertNotIn("deleteDimension", request)
 
     def test_batch_read_passes_ranges_without_row_by_row_requests(self):
         spreadsheet = Mock()

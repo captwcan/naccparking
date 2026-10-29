@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from dashboard.theme import apply_theme_css
 
 
 def apply_dashboard_styles(is_dark: bool = True) -> None:
@@ -334,3 +335,6 @@ def apply_dashboard_styles(is_dark: bool = True) -> None:
 """,
         unsafe_allow_html=True,
     )
+
+
+    apply_theme_css()

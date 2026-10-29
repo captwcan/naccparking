@@ -268,7 +268,7 @@ class ArchiveMigration:
         try:
             self.sheets.replace_source_columns(
                 SOURCE_SHEET,
-                [row[:4] for row in plan.retained_rows],
+                plan.retained_rows,
                 clear_through_row_count=plan.source_span,
             )
             source_updated = True
@@ -282,7 +282,7 @@ class ArchiveMigration:
                 self.logger.error("RawData update verification failed; restoring source snapshot")
                 self.sheets.replace_source_columns(
                     SOURCE_SHEET,
-                    [row[:4] for row in plan.original_body],
+                    plan.original_body,
                     clear_through_row_count=max(plan.source_span, len(plan.retained_rows)),
                 )
             raise
@@ -304,7 +304,7 @@ class ArchiveMigration:
         plan = build_archive_plan(values)
         self.sheets.replace_source_columns(
             SOURCE_SHEET,
-            [row[:4] for row in plan.original_body],
+            plan.original_body,
             clear_through_row_count=plan.source_span,
         )
         self.logger.info("RawData restored from %s", backup_name)
