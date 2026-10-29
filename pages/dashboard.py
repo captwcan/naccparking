@@ -13,13 +13,11 @@ st.set_page_config(
     page_title="แดชบอร์ดรถค้างอาคาร",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 
 init_theme_state()
-st.session_state.dark_mode_toggle = is_dark_theme()
-st.toggle("โหมดกลางคืน", key="dark_mode_toggle", on_change=set_theme_from_toggle)
 apply_dashboard_styles(is_dark_theme())
 
 
@@ -50,7 +48,20 @@ if st.sidebar.button("รีเฟรชข้อมูล", width="stretch"):
     clear_dashboard_cache()
     st.rerun()
 st.sidebar.markdown("---")
-st.page_link("app_parking.py", label="กลับไปบันทึกทะเบียน", icon="✍️")
+result = get_dashboard_data()
+header_content, header_theme = st.columns([4, 1], vertical_alignment="center")
+with header_content:
+    components.render_hero(
+        "ประวัติและแดชบอร์ด",
+        "ตรวจสอบทะเบียนย้อนหลัง วิเคราะห์การจอด และส่งออกรายงาน",
+        result.loaded_at,
+    )
+with header_theme:
+    st.session_state.dark_mode_toggle = is_dark_theme()
+    st.toggle("โหมดกลางคืน", key="dark_mode_toggle", on_change=set_theme_from_toggle)
+with st.container(horizontal=True, key="parking_navigation", gap="xsmall"):
+    st.page_link("app_parking.py", label="บันทึกทะเบียน", icon=":material/edit_note:")
+    st.page_link("pages/dashboard.py", label="ประวัติและแดชบอร์ด", icon=":material/space_dashboard:")
 st.session_state.dashboard_section = st.segmented_control(
     "เมนูประวัติและรายงาน",
     options=list(DASHBOARD_SECTIONS),
@@ -59,13 +70,6 @@ st.session_state.dashboard_section = st.segmented_control(
     selection_mode="single",
     key="dashboard_section_selector",
 ) or "overview"
-
-result = get_dashboard_data()
-components.render_hero(
-    "แดชบอร์ดรถค้างอาคาร",
-    "ภาพรวมข้อมูลรถค้างอาคารจาก Google Sheets",
-    result.loaded_at,
-)
 
 if result.error:
     components.render_error(result.error)

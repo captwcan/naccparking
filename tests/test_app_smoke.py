@@ -43,11 +43,11 @@ class AppSmokeTests(unittest.TestCase):
    at.run(timeout=30)
    assert not at.exception,list(at.exception)
    [t for t in at.text_input if t.label=='ทะเบียนรถยนต์'][0].input('กก1234');at.run(timeout=30)
-   [b for b in at.button if b.label=='💾 บันทึกข้อมูลเข้าสู่ระบบ'][0].click();at.run(timeout=30)
+   [b for b in at.button if b.label=='บันทึกข้อมูลเข้าสู่ระบบ'][0].click();at.run(timeout=30)
    assert not at.exception,list(at.exception)
    assert book.raw.rows[1][0]==bangkok_now().strftime('%Y-%m-%d'),book.raw.rows
    assert book.raw.rows[1][13],book.raw.rows
-   [b for b in at.button if b.label=='🗑️ ยกเลิกชุดล่าสุด'][0].click();at.run(timeout=30)
+   [b for b in at.button if b.label=='ยกเลิกชุดล่าสุด'][0].click();at.run(timeout=30)
    assert not at.exception,list(at.exception)
    assert book.raw.rows[1][0]  # Clicking cancel alone must not delete anything.
    [b for b in at.button if b.label=='ยืนยันยกเลิกชุดล่าสุด'][0].click();at.run(timeout=30)

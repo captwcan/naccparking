@@ -28,7 +28,7 @@ class FrontendWorkflowTests(unittest.TestCase):
 
     def test_add_and_theme_change_preserve_draft(self):
         self.plates()[0].input('กก1234'); self.app.run()
-        self.button('➕ เพิ่มทะเบียน').click(); self.app.run()
+        self.button('เพิ่มทะเบียน').click(); self.app.run()
         self.assertEqual(len(self.plates()), 2)
         self.app.toggle[0].set_value(False); self.app.run()
         self.assertEqual(self.plates()[0].value, 'กก1234')
@@ -46,13 +46,56 @@ class FrontendWorkflowTests(unittest.TestCase):
 
     def test_duplicate_variants_disable_save(self):
         self.plates()[0].input('กก1234'); self.app.run()
-        self.button('➕ เพิ่มทะเบียน').click(); self.app.run()
+        self.button('เพิ่มทะเบียน').click(); self.app.run()
         self.plates()[1].input('กก- 1234'); self.app.run()
-        self.assertTrue(self.button('💾 บันทึกข้อมูลเข้าสู่ระบบ').disabled)
+        self.assertTrue(self.button('บันทึกข้อมูลเข้าสู่ระบบ').disabled)
         self.assertTrue(any('ซ้ำ' in warning.value for warning in self.app.warning))
 
     def test_blank_input_cannot_submit(self):
-        self.assertTrue(self.button('💾 บันทึกข้อมูลเข้าสู่ระบบ').disabled)
+        self.assertTrue(self.button('บันทึกข้อมูลเข้าสู่ระบบ').disabled)
+
+    def test_draft_and_building_survive_visiting_dashboard(self):
+        self.book.settings.rows.append(['อาคาร 8'])
+        self.app.run()
+        next(w for w in self.app.selectbox if w.label == 'อาคาร (Building)').set_value('อาคาร 8')
+        self.plates()[0].input('กก1234')
+        next(w for w in self.app.selectbox if w.label == 'จังหวัด').set_value('ชลบุรี')
+        self.app.run()
+        self.app.switch_page('pages/dashboard.py').run()
+        self.app.switch_page('app_parking.py').run()
+        self.assertEqual(self.plates()[0].value, 'กก1234')
+        self.assertEqual(next(w for w in self.app.selectbox if w.label == 'จังหวัด').value, 'ชลบุรี')
+        self.assertEqual(next(w for w in self.app.selectbox if w.label == 'อาคาร (Building)').value, 'อาคาร 8')
+        self.assertFalse(self.app.exception)
+
+    def test_cancel_confirmation_can_be_dismissed_without_writing(self):
+        self.plates()[0].input('กก1234'); self.app.run()
+        self.button('บันทึกข้อมูลเข้าสู่ระบบ').click(); self.app.run()
+        saved = [list(row) for row in self.book.raw.rows]
+        self.button('ยกเลิกชุดล่าสุด').click(); self.app.run()
+        self.button('เก็บข้อมูลชุดนี้ไว้').click(); self.app.run()
+        self.assertEqual(self.book.raw.rows, saved)
+        self.assertFalse(self.app.session_state.confirm_cancel)
+        self.assertFalse(self.app.exception)
+
+    def test_summary_updates_after_save_with_real_change_feedback(self):
+        self.plates()[0].input('กก1234'); self.app.run()
+        self.button('บันทึกข้อมูลเข้าสู่ระบบ').click(); self.app.run()
+        summary = ''.join(w.value for w in self.app.markdown if 'mini-dashboard-shell' in w.value)
+        self.assertIn('ยอดรวมเพิ่มขึ้น 1 รายการ', summary)
+        self.assertIn('mini-stat-delta">+1', summary)
+        self.assertIn('รีเฟรชทุก 30 วินาที', summary)
+        self.assertFalse(self.app.exception)
+
+    def test_refresh_summary_reads_new_rows_and_preserves_draft(self):
+        from services.parking_domain import bangkok_now
+        self.plates()[0].input('กก5678'); self.app.run()
+        self.book.raw.rows.append([bangkok_now().strftime('%Y-%m-%d'), 'อาคาร 4', 'กก1234', 'ชลบุรี'])
+        self.button('รีเฟรชยอด').click(); self.app.run()
+        self.assertEqual(self.plates()[0].value, 'กก5678')
+        summary = ''.join(w.value for w in self.app.markdown if 'mini-dashboard-shell' in w.value)
+        self.assertIn('ยอดรวมเพิ่มขึ้น 1 รายการ', summary)
+        self.assertFalse(self.app.exception)
 
     def test_large_batch_and_theme_keep_values(self):
         self.plates()[0].input('กก1234'); self.app.run()
@@ -60,6 +103,18 @@ class FrontendWorkflowTests(unittest.TestCase):
         self.app.run(timeout=30)
         self.assertEqual(len(self.plates()), 100)
         self.assertEqual(self.plates()[0].value, 'กก1234')
+        self.assertFalse(self.app.exception)
+
+    def test_forty_rows_remain_editable_after_summary_refresh(self):
+        next(item for item in self.app.number_input if item.label == 'จำนวนทะเบียนที่จะบันทึก').set_value(40)
+        self.app.run(timeout=30)
+        self.plates()[0].input('กก1234')
+        self.plates()[-1].input('ขข5678')
+        self.app.run(timeout=30)
+        self.button('รีเฟรชยอด').click(); self.app.run(timeout=30)
+        self.assertEqual(len(self.plates()), 40)
+        self.assertEqual(self.plates()[0].value, 'กก1234')
+        self.assertEqual(self.plates()[-1].value, 'ขข5678')
         self.assertFalse(self.app.exception)
 
     def test_history_filters_and_reset(self):

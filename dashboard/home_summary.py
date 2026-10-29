@@ -65,6 +65,7 @@ def render_home_mini_dashboard(
     buildings: list[str],
     is_dark: bool | None = None,
     error_message: str | None = None,
+    loaded_at: datetime | None = None,
 ) -> None:
     theme_attr = "" if is_dark is None else f' data-theme="{"dark" if is_dark else "light"}"'
     if error_message:
@@ -76,41 +77,45 @@ def render_home_mini_dashboard(
         return
 
     cards = get_today_building_counts(df, buildings)
-    total = next(card["count"] for card in cards if card["kind"] == "total")
-    _render_html(f'<div class="parking-summary"><div>ยอดบันทึกวันนี้<br><small>รวมทุกอาคาร · เวลาไทย</small></div><div><strong>{total:,}</strong> รายการ</div></div>')
-    with st.expander("ดูยอดแยกตามอาคาร", expanded=False):
-        _render_html(_build_dashboard_markup(cards, theme_attr=theme_attr))
+    current = {str(card["label"]): int(card["count"]) for card in cards}
+    today = bangkok_now().date()
+    previous = st.session_state.get("home_summary_snapshot", {}) if st.session_state.get("home_summary_date") == today else {}
+    changes = {label: count - previous[label] for label, count in current.items() if label in previous and count != previous[label]}
+    st.session_state.home_summary_snapshot = current
+    st.session_state.home_summary_date = today
+    _render_html(_build_dashboard_markup(cards, theme_attr=theme_attr, changes=changes, loaded_at=loaded_at))
 
 
-def _build_dashboard_markup(cards: list[dict[str, object]], theme_attr: str = "") -> str:
-    cards_html = "".join(_render_card(card) for card in cards)
+def _build_dashboard_markup(cards, theme_attr="", changes=None, loaded_at=None):
+    changes = changes or {}
+    total = next((card for card in cards if card["kind"] == "total"), None)
+    ordered = ([total] if total else []) + [card for card in cards if card["kind"] != "total"]
+    cards_html = "".join(_render_card(card, changes.get(str(card["label"]), 0)) for card in ordered)
+    checked = loaded_at.strftime("%H:%M:%S") if loaded_at else "—"
+    total_change = changes.get("รวมทุกอาคาร", 0)
+    feedback = f"ยอดรวมเพิ่มขึ้น {total_change} รายการ" if total_change > 0 else f"ยอดรวมลดลง {abs(total_change)} รายการ" if total_change < 0 else ""
     return (
-        f'<div class="mini-dashboard-shell"{theme_attr}>'
-        '<div class="mini-dashboard-title">สรุปยอดบันทึกวันนี้</div>'
+        f'<section class="mini-dashboard-shell"{theme_attr} aria-label="ยอดบันทึกวันนี้">'
+        '<div class="mini-dashboard-heading"><h2>ยอดบันทึกวันนี้</h2>'
+        f'<span class="summary-business-date">{bangkok_now():%d/%m/%Y}</span></div>'
         '<div class="mini-dashboard-wrap" aria-label="สรุปยอดบันทึกรถวันนี้">'
-        '<div class="mini-dashboard-grid">'
-        f"{cards_html}"
-        "</div>"
-        "</div>"
-        "</div>"
+        f'<div class="mini-dashboard-grid">{cards_html}</div></div>'
+        f'<div class="summary-freshness"><span class="summary-status-dot" aria-hidden="true"></span>อัปเดตจากชีท {checked} · รีเฟรชทุก 30 วินาที</div>'
+        f'<div class="summary-change-announcement" role="status" aria-live="polite">{feedback}</div></section>'
     )
 
 
-def _render_card(card: dict[str, object]) -> str:
+def _render_card(card, change=0):
     label = html.escape(str(card["label"]))
     count = html.escape(f"{int(card['count']):,}")
     kind = html.escape(str(card["kind"]))
-    subtitle = "รวมวันนี้" if kind == "total" else "รายการวันนี้"
-    icon = "∑" if kind == "total" else "▦"
+    changed = " mini-stat-card--updated" if change else ""
+    delta = f'<span class="mini-stat-delta">{change:+,}</span>' if change else ''
     return (
-        f'<div class="mini-stat-card mini-stat-card--{kind}">'
-        '<div class="mini-stat-top">'
-        f'<span class="mini-stat-icon">{icon}</span>'
-        f'<span class="mini-stat-title">{label}</span>'
-        "</div>"
-        f'<div class="mini-stat-value">{count}</div>'
-        f'<div class="mini-stat-subtitle">{subtitle}</div>'
-        "</div>"
+        f'<div class="mini-stat-card mini-stat-card--{kind}{changed}">'
+        f'<div class="mini-stat-top"><span class="mini-stat-title">{label}</span></div>'
+        f'<div class="mini-stat-reading"><span class="mini-stat-value">{count}</span>{delta}</div>'
+        '<span class="mini-stat-subtitle">รายการวันนี้</span></div>'
     )
 
 
