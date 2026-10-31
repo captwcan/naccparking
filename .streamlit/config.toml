@@ -6,29 +6,29 @@ base = "dark"
 font = "IBM Plex Sans Thai:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap"
 
 [theme.dark]
-primaryColor = "#8cd4c3"
-backgroundColor = "#101419"
-secondaryBackgroundColor = "#191f27"
-textColor = "#edf1f7"
-borderColor = "#35404e"
-dataframeHeaderBackgroundColor = "#202933"
-dataframeHeaderTextColor = "#edf1f7"
-chartCategoricalColors = ["#8cd4c3", "#8bb8e8", "#dab68a", "#c4a3df"]
+primaryColor = "#bda3ff"
+backgroundColor = "#111015"
+secondaryBackgroundColor = "#1d1b25"
+textColor = "#f2eff8"
+borderColor = "#4d455d"
+dataframeHeaderBackgroundColor = "#2a2538"
+dataframeHeaderTextColor = "#f2eff8"
+chartCategoricalColors = ["#bda3ff", "#80b9db", "#d5ad86", "#8bd3b3"]
 
 [theme.dark.sidebar]
-backgroundColor = "#12171e"
-secondaryBackgroundColor = "#191f27"
+backgroundColor = "#16141c"
+secondaryBackgroundColor = "#1d1b25"
 
 [theme.light]
-primaryColor = "#126b5b"
-backgroundColor = "#f5f6f8"
+primaryColor = "#7042b5"
+backgroundColor = "#f5f2f9"
 secondaryBackgroundColor = "#ffffff"
-textColor = "#202b3a"
-borderColor = "#ccd3dc"
-dataframeHeaderBackgroundColor = "#edf3f1"
-dataframeHeaderTextColor = "#202b3a"
-chartCategoricalColors = ["#126b5b", "#32659b", "#956134", "#8058a0"]
+textColor = "#2b2436"
+borderColor = "#b5aac5"
+dataframeHeaderBackgroundColor = "#eee7f8"
+dataframeHeaderTextColor = "#2b2436"
+chartCategoricalColors = ["#7042b5", "#32659b", "#956134", "#257457"]
 
 [theme.light.sidebar]
-backgroundColor = "#eff1f4"
+backgroundColor = "#eee9f4"
 secondaryBackgroundColor = "#ffffff"

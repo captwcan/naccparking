@@ -92,7 +92,7 @@ def render_daily_counts_chart(daily_df: pd.DataFrame, height: int = 280) -> None
     count_col = _count_column(chart_df)
     chart = (
         alt.Chart(chart_df)
-        .mark_line(point=True, interpolate="monotone", color=_chart_accent())
+        .mark_line(point=alt.OverlayMarkDef(filled=True, color=_chart_accent(), size=36), interpolate="monotone", color=_chart_accent())
         .encode(
             x=alt.X(
                 f"{DISPLAY_DATE_COL}:N",
@@ -107,7 +107,7 @@ def render_daily_counts_chart(daily_df: pd.DataFrame, height: int = 280) -> None
             ],
         )
         .properties(height=height, background=get_theme()["card_bg"])
-        .configure_axis(labelColor=_chart_text(), titleColor=_chart_text(), gridColor=_chart_grid())
+        .configure_axis(labelColor=_chart_text(), titleColor=_chart_text(), gridColor=_chart_grid(), labelFont="IBM Plex Sans Thai", titleFont="IBM Plex Sans Thai")
         .configure_view(stroke=None)
     )
     st.altair_chart(chart, width="stretch", theme=None)
@@ -148,7 +148,7 @@ def render_horizontal_bar_chart(
             ],
         )
         .properties(height=max(height, 28 * len(plot_df)), background=get_theme()["card_bg"])
-        .configure_axis(labelColor=_chart_text(), titleColor=_chart_text(), gridColor=_chart_grid())
+        .configure_axis(labelColor=_chart_text(), titleColor=_chart_text(), gridColor=_chart_grid(), labelFont="IBM Plex Sans Thai", titleFont="IBM Plex Sans Thai")
         .configure_view(stroke=None)
     )
     st.altair_chart(chart, width="stretch", theme=None)

@@ -47,3 +47,20 @@ Both native theme variants now use the same palette as the application tokens in
 References: [native light/dark configuration](https://docs.streamlit.io/develop/concepts/configuration/theming), [Streamlit 1.66.1 theme selection](https://github.com/streamlit/streamlit/blob/1.66.1/frontend/app/src/components/MainMenu/themeSection.ts), [trusted JavaScript in st.html](https://docs.streamlit.io/develop/api-reference/text/st.html).
 
 Follow-up checks cover desktop dark/light widgets and charts, a dark calendar overlay and raw-data canvas table, and the 390px mobile header and registration form. No production parking records are written by these checks.
+
+## Purple visual refinement - 31 October 2026
+
+The supplied references combine compact mobile controls, layered graphite panels, restrained illuminated accents and a violet instrument-panel palette. The refinement keeps the existing registration workflow, six daily counters, top-right theme action, horizontal vehicle fields and equal-width Add/Clear controls.
+
+Dark mode uses a near-neutral mauve charcoal (`#111015`), raised graphite panels (`#1d1b25`) and lavender accents (`#bda3ff`). Light mode uses a faint violet canvas (`#f5f2f9`), white panels and a deeper violet (`#7042b5`) for readable actions. Both native Streamlit palettes and custom CSS tokens are updated together. Green remains reserved for the actual last-read status, and red retains its error/cancellation meaning.
+
+The daily total has a restrained violet gradient with a small decorative arc motif. Secondary counters use quieter surfaces and less repeated text. Navigation explicitly marks the current page; buttons, section markers, spacing and corners share the same visual system. Gradients are restricted to the total and primary action; there are no invented gauges, occupancy percentages, animated ambient backgrounds or data changes.
+
+Research:
+- [Radix scale roles](https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale): separate canvas, surfaces, interaction states, borders and text by role.
+- [Radix palette composition](https://www.radix-ui.com/colors/docs/palette-composition/composing-a-palette): pair violet accents with muted mauve neutrals and preserve distinct semantic status colors. These are custom project colors, not an unmodified Radix scale.
+- [W3C text contrast](https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html): check text against each adjacent surface and gradient stop. The chosen body, secondary, accent, total and primary-action text pairs exceed 4.5:1. The lowest checked pair is secondary light text on the tinted raised surface, at 4.52:1.
+
+An important rendered check is button-label inheritance: the native Markdown wrapper must inherit the button foreground rather than forcing the page text color over the gradient. Local browser inspection confirms dark ink on the light lavender action in dark mode, and white text on the deeper violet action in light mode. Theme switching preserves a typed registration draft.
+
+Rollback source checkpoint: `naccparking-pre-purple-checkpoint-20261031.zip`, commit `ac1f0abb2a664ba3f0e97c2ea0db7489874a6ec6`.

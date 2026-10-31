@@ -448,7 +448,8 @@ with st.container(key="parking_header", horizontal=True, horizontal_alignment="d
     render_theme_switch()
 
 with st.container(horizontal=True, key="parking_navigation", gap="xsmall"):
-    st.page_link("app_parking.py", label="บันทึกทะเบียน", icon=":material/edit_note:")
+    with st.container(key="parking_navigation_current", width="content"):
+        st.page_link("app_parking.py", label="บันทึกทะเบียน", icon=":material/edit_note:")
     st.page_link("pages/dashboard.py", label="ประวัติ", icon=":material/space_dashboard:")
     st.markdown('<a class="parking-nav" href="#parking-reports">รายงาน <span aria-hidden="true">↗</span></a>', unsafe_allow_html=True)
 
