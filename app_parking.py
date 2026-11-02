@@ -8,6 +8,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import re
 from services.parking_domain import bangkok_now, vehicle_key
+from services.archive_service import parse_parking_datetime
 from dashboard.data_service import clear_dashboard_cache
 from dashboard.home_summary import render_home_mini_dashboard
 from dashboard.theme import apply_theme_css, init_theme_state, is_dark_theme, render_theme_switch
@@ -24,7 +25,6 @@ from report_generator import (
 from services.google_sheets_service import (
     append_parking_rows,
     batch_delete_rows,
-    read_parking_values,
     cancel_parking_records,
     read_all_parking_values,
     read_buildings,
@@ -149,6 +149,15 @@ def remember_vehicle_draft(row_id):
 def remember_building():
     st.session_state.draft_building = st.session_state.recording_building
 
+
+def remember_recording_date():
+    st.session_state.draft_recording_date = st.session_state.recording_date
+
+
+def use_today_for_recording():
+    st.session_state.recording_date = bangkok_now().date()
+    remember_recording_date()
+
 def refresh_vehicle_count_widget():
     st.session_state.vehicle_count_widget_version += 1
 
@@ -237,7 +246,8 @@ def find_form_duplicates(entries):
 def find_sheet_duplicates(records, current_date, entries):
     existing = set()
     for row in records:
-        if len(row) >= 4 and row[0] == current_date:
+        parsed = parse_parking_datetime(row[0]) if len(row) >= 4 else None
+        if parsed and parsed.date().isoformat() == current_date:
             existing.add(duplicate_key(row[2], row[3]))
     return [entry for entry in entries if duplicate_key(entry["plate"], entry["province"]) in existing]
 
@@ -466,12 +476,32 @@ render_home_summary_placeholder(home_summary_placeholder)
 with st.container(key="parking_workspace"):
     # ---- FORM SECTION ----
     with st.container(border=True, key="location_panel"):
-        st.markdown('<div class="parking-section-heading"><span class="parking-step">01</span><div><h2>สถานที่ตรวจพบ</h2><p>ใช้สถานที่เดียวกันสำหรับทะเบียนในชุดนี้</p></div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="parking-section-heading"><span class="parking-step">01</span><div><h2>วันที่และสถานที่ตรวจพบ</h2><p>ใช้วันที่และอาคารเดียวกันสำหรับทะเบียนในชุดนี้</p></div></div>', unsafe_allow_html=True)
         if not buildings_list:
             st.error("ไม่มีรายชื่ออาคารในระบบ โปรดเพิ่มที่เมนู Admin (แถบด้านซ้าย)")
         if "recording_building" not in st.session_state and st.session_state.get("draft_building") in buildings_list:
             st.session_state.recording_building = st.session_state.draft_building
-        building = st.selectbox("อาคาร (Building)", buildings_list if buildings_list else [""], key="recording_building", on_change=remember_building)
+        today = bangkok_now().date()
+        if "recording_date" not in st.session_state:
+            st.session_state.recording_date = st.session_state.get("draft_recording_date", today)
+        with st.container(key="parking_record_details"):
+            date_col, building_col = st.columns([1, 1.4], gap="small")
+            with date_col:
+                recording_date = st.date_input(
+                    "วันที่ตรวจพบ", max_value=today, format="DD/MM/YYYY",
+                    key="recording_date", on_change=remember_recording_date,
+                    help="เลือกวันที่ตรวจพบรถจริง สำหรับลงข้อมูลย้อนหลังได้ ใช้เวลาไทย",
+                )
+            with building_col:
+                building = st.selectbox("อาคาร (Building)", buildings_list if buildings_list else [""], key="recording_building", on_change=remember_building)
+        valid_recording_date = isinstance(recording_date, date) and recording_date <= today
+        if not valid_recording_date:
+            st.error("กรุณาเลือกวันที่ตรวจพบเป็นวันนี้หรือวันที่ผ่านมา")
+        elif recording_date < today:
+            st.markdown(f'<div class="parking-recording-notice" role="status">บันทึกย้อนหลังวันที่ {recording_date:%d/%m/%Y}<span>ยอดด้านบนยังเป็นยอดของวันนี้</span></div>', unsafe_allow_html=True)
+            st.button("ใช้วันที่วันนี้", on_click=use_today_for_recording, key="use_today_for_recording")
+        else:
+            st.caption(f"วันที่ตรวจพบ {recording_date:%d/%m/%Y} · เวลาไทย")
 
     st.markdown('<div class="parking-section-heading"><span class="parking-step">02</span><div><h2>ทะเบียนที่ตรวจพบ</h2><p>กรอกทะเบียนพร้อมจังหวัด เพิ่มได้สูงสุด 100 รายการต่อชุด</p></div></div>', unsafe_allow_html=True)
 
@@ -557,23 +587,26 @@ with st.container(key="parking_workspace"):
     elif not entries_preview:
         st.caption("กรอกทะเบียนอย่างน้อย 1 รายการเพื่อเปิดปุ่มบันทึก")
     else:
-        st.caption(f"พร้อมบันทึก {len(entries_preview)} รายการ · {building} · {bangkok_now():%d/%m/%Y}")
+        if valid_recording_date:
+            st.caption(f"พร้อมบันทึก {len(entries_preview)} รายการ · {building} · {recording_date:%d/%m/%Y}")
 
     # ---- ACTION BUTTONS ----
     btn_col2 = st.container(key="parking_save_action")
 
     with btn_col2:
-        if st.button("บันทึกข้อมูลเข้าสู่ระบบ", icon=":material/check:", type="primary", width="stretch", disabled=bool(duplicate_ids) or not building or not entries_preview):
+        if st.button("บันทึกข้อมูลเข้าสู่ระบบ", icon=":material/check:", type="primary", width="stretch", disabled=bool(duplicate_ids) or not building or not entries_preview or not valid_recording_date):
             entries, skipped_count = collect_vehicle_entries()
             if not building:
                 st.error("❌ กรุณาเลือกอาคารก่อนบันทึกข้อมูลครับ")
             elif not entries:
                 st.error("❌ กรุณากรอกทะเบียนรถอย่างน้อย 1 รายการก่อนบันทึกข้อมูลครับ")
+            elif not isinstance(recording_date, date) or recording_date > bangkok_now().date():
+                st.error("กรุณาเลือกวันที่ตรวจพบเป็นวันนี้หรือวันที่ผ่านมา")
             else:
-                current_date = bangkok_now().strftime("%Y-%m-%d")
+                current_date = recording_date.isoformat()
 
                 try:
-                    records = read_parking_values(sheet)
+                    records = read_all_parking_values(sheet.spreadsheet)
                     form_duplicates = find_form_duplicates(entries)
                     sheet_duplicates = find_sheet_duplicates(records, current_date, entries)
 
@@ -582,7 +615,7 @@ with st.container(key="parking_workspace"):
                         if form_duplicates:
                             st.warning("รายการซ้ำในฟอร์ม:\n" + format_vehicle_list(form_duplicates))
                         if sheet_duplicates:
-                            st.warning("รายการที่มีอยู่แล้วในวันนี้:\n" + format_vehicle_list(sheet_duplicates))
+                            st.warning(f"รายการที่มีอยู่แล้วในวันที่ {recording_date:%d/%m/%Y}:\n" + format_vehicle_list(sheet_duplicates))
                     else:
                         rows_to_append = [
                             [current_date, building, entry["plate"], entry["province"]]
@@ -610,7 +643,7 @@ with st.container(key="parking_workspace"):
                         st.session_state.last_saved_province = entries[-1]["province"]
                         st.session_state.last_saved_row = saved_rows[-1] if saved_rows else None
 
-                        st.success(f"บันทึกสำเร็จ {len(rows_to_append)} รายการ · {building} · {bangkok_now():%d/%m/%Y}")
+                        st.success(f"บันทึกสำเร็จ {len(rows_to_append)} รายการ · {building} · {recording_date:%d/%m/%Y}")
                         st.info("รายการที่บันทึก:\n" + format_vehicle_list(entries))
                         if skipped_count:
                             st.warning(f"ข้ามแถวที่ไม่ได้กรอกทะเบียน {skipped_count} แถว")

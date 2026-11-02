@@ -64,3 +64,15 @@ Research:
 An important rendered check is button-label inheritance: the native Markdown wrapper must inherit the button foreground rather than forcing the page text color over the gradient. Local browser inspection confirms dark ink on the light lavender action in dark mode, and white text on the deeper violet action in light mode. Theme switching preserves a typed registration draft.
 
 Rollback source checkpoint: `naccparking-pre-purple-checkpoint-20261031.zip`, commit `ac1f0abb2a664ba3f0e97c2ea0db7489874a6ec6`.
+
+## Backdated registration - 2 November 2026
+
+The recording form now has a date picker beside the building on tablet/desktop, stacking into full-width fields on phones. It defaults to the Bangkok calendar day and accepts today or earlier dates. The selected date is shown before saving and used in source rows, saved-batch metadata, duplicate checks and cancellation. A backdated notice distinguishes the recording date from the unchanged daily counters above; a Today action resets only the date. Date and vehicle drafts survive theme changes, summary refreshes and dashboard visits.
+
+Duplicate checks read both RawData and Archive tabs, interpreting existing supported date formats with the archive parser. New records retain ISO dates and the existing UUID/formula-preserving write path. No workbook schema migration is required.
+
+The native [date input](https://docs.streamlit.io/develop/api-reference/widgets/st.date_input) provides an accessible calendar, DD/MM/YYYY formatting and a maximum date. Responsive [columns](https://docs.streamlit.io/develop/api-reference/layout/st.columns) keep the two context fields side by side on larger screens; a scoped 600px breakpoint stacks them on phones. Existing horizontal plate/province/delete and equal-width Add/Clear controls are retained.
+
+Validation: 86 automated tests, including selected-date writes, normalized duplicates on the selected day, archive duplicates, different provinces, empty dates, Bangkok midnight, draft preservation and cancellation of a backdated batch after changing the date. Browser checks at 320, 390, 768 and 1440px found no horizontal overflow; the compact vehicle and action rows remained aligned. Mock-workbook browser saving confirmed the selected historical date without affecting today's count. Dark/light calendar and form inspection use an in-memory preview, with no production parking records submitted.
+
+Before-change source checkpoint: `naccparking-pre-backdate-20261102.zip`, commit `d57deee606a5fdf145336832723beabcccca838c`.

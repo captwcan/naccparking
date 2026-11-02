@@ -140,6 +140,11 @@ button:focus-visible,input:focus-visible,a:focus-visible { outline:3px solid var
 .parking-section-heading h2 { font-size:1rem !important; font-weight:600; margin:0; padding:0 !important; }
 .parking-section-heading p { color:var(--text-muted) !important; font-size:.8125rem; margin:.2rem 0 0; line-height:1.7; }
 .st-key-location_panel { background:var(--card-gradient); border-color:color-mix(in srgb,var(--border) 65%,transparent) !important; border-radius:16px; padding:1.15rem !important; box-shadow:var(--card-shadow); margin-bottom:.5rem; }
+.st-key-parking_record_details [data-testid="stColumn"] { min-width:0; }
+.st-key-parking_record_details [data-testid="stDateInputField"] { min-height:44px; }
+.st-key-parking_record_details [data-testid="stDateInputCalendarButton"] { min-height:44px; min-width:44px; }
+.parking-recording-notice { background:var(--accent-soft); color:var(--primary); border-left:3px solid var(--primary); border-radius:8px; padding:.65rem .8rem; font-size:.875rem; }
+.parking-recording-notice span { display:block; color:var(--text-muted); font-size:.8125rem; margin-top:.2rem; }
 div[class*="st-key-vehicle_row_"] { background:var(--card-gradient); border-color:color-mix(in srgb,var(--border) 65%,transparent) !important; border-radius:14px; padding:.85rem 1rem !important; }
 .parking-row-number { color:var(--text-muted); font-size:.75rem; font-weight:500; }
 div[class*="st-key-vehicle_row_"] [data-testid="stTextInput"] input { letter-spacing:.035em; }
@@ -213,6 +218,10 @@ div[class*="st-key-vehicle_row_"] [data-testid="stButton"] button { color:var(--
  div[class*="st-key-vehicle_row_"] [data-testid="stButton"] button { padding:.4rem .25rem; width:44px; min-width:44px; }
  div[class*="st-key-vehicle_row_"] [data-testid="stWidgetLabel"] p { font-size:.8rem; }
  div[class*="st-key-vehicle_row_"] { padding:.7rem !important; }
+}
+@media(max-width:600px) {
+ .st-key-parking_record_details [data-testid="stHorizontalBlock"] { flex-wrap:wrap !important; gap:.75rem !important; }
+ .st-key-parking_record_details [data-testid="stColumn"] { flex:1 1 100% !important; width:100% !important; min-width:0 !important; }
 }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; transition:none !important; animation:none !important; } }
 </style>
