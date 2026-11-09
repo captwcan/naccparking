@@ -196,7 +196,9 @@ def render_filter_bar(df: pd.DataFrame, key_prefix: str) -> dict[str, object]:
     if selected_month_label != "ทั้งหมด":
         selected_year, selected_month, _ = months[month_labels.index(selected_month_label) - 1]
 
-    if isinstance(selected_range, tuple) and len(selected_range) == 2:
+    if selected_range is None:
+        date_range = None
+    elif isinstance(selected_range, tuple) and len(selected_range) == 2:
         date_range = selected_range
     elif isinstance(selected_range, tuple):
         date_range = (selected_range[0], selected_range[0]) if selected_range else None

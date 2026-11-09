@@ -149,10 +149,12 @@ def cancel_parking_records(worksheet, batch):
         requests = []
         found_ids = set()
         for index, row in enumerate(values[1:], 1):
-            if len(row) > 13 and row[13] in ids and any(row[:4]):
+            if len(row) > 13 and row[13] in ids:
                 if row[13] in found_ids:
                     raise ValueError("พบรหัสรายการซ้ำ กรุณาให้ผู้ดูแลตรวจสอบ")
                 found_ids.add(row[13])
+                if not any(row[:4]):
+                    continue  # An already cancelled UUID is a successful no-op.
                 expected = next(item for item in batch if item["record_id"] == row[13])
                 if row[:4] != [expected[k] for k in ("date", "building", "plate", "province")]:
                     raise ValueError("ข้อมูลรายการถูกแก้ไขแล้ว กรุณารีเฟรช")
@@ -160,8 +162,19 @@ def cancel_parking_records(worksheet, batch):
         if found_ids != ids:
             raise ValueError("ไม่พบรายการครบชุด อาจถูกยกเลิกหรือย้ายไปข้อมูลย้อนหลังแล้ว กรุณารีเฟรช")
         if requests:
-            worksheet.spreadsheet.batch_update({"requests": requests})
-        return len(requests)
+            try:
+                worksheet.spreadsheet.batch_update({"requests": requests})
+            except (gspread.exceptions.APIError, ConnectionError, Timeout) as error:
+                if isinstance(error, gspread.exceptions.APIError) and error.response.status_code not in TRANSIENT_STATUS_CODES:
+                    raise
+                try:
+                    actual = read_source_with_ids(worksheet)
+                    cancelled = all(sum(len(r)>13 and r[13]==record_id and not any(r[:4]) for r in actual[1:]) == 1 for record_id in ids)
+                except Exception:
+                    raise error
+                if not cancelled:
+                    raise error
+        return len(ids)
 
 
 def batch_delete_rows(worksheet, row_numbers):

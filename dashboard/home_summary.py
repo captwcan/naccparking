@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from services.parking_domain import bangkok_now
+from services.parking_domain import bangkok_now, parking_date_series, normalize_plate
 import html
 from datetime import date, datetime
 
@@ -32,7 +32,11 @@ def get_today_records(df: pd.DataFrame, today: date | None = None) -> pd.DataFra
         return df.iloc[0:0].copy()
 
     parsed_dates = _parse_dates(df[date_col])
-    return df[parsed_dates.dt.date == today].copy()
+    valid = parsed_dates.dt.date == today
+    plate_col = _find_column(df, ["ทะเบียนรถ", "ทะเบียนรถยนต์", "plate"])
+    if plate_col:
+        valid &= df[plate_col].fillna("").map(normalize_plate).ne("")
+    return df[valid].copy()
 
 
 def get_today_building_counts(
@@ -146,13 +150,4 @@ def _normalize_column_name(value: object) -> str:
 
 
 def _parse_dates(series: pd.Series) -> pd.Series:
-    as_text = series.astype(str).str.strip()
-    parsed = pd.to_datetime(series, errors="coerce")
-    slash_mask = as_text.str.match(r"^\d{1,2}/\d{1,2}/\d{2,4}$", na=False)
-    if slash_mask.any():
-        parsed.loc[slash_mask] = pd.to_datetime(
-            as_text.loc[slash_mask],
-            dayfirst=True,
-            errors="coerce",
-        )
-    return pd.Series(parsed, index=series.index)
+    return parking_date_series(series)

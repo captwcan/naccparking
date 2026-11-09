@@ -1,4 +1,5 @@
 import pandas as pd
+from services.parking_domain import parking_date_series, normalize_plate
 
 
 LONG_PARKING_DAYS_COLUMN = "จำนวนวันที่จอดสะสม (วัน)"
@@ -11,15 +12,11 @@ def summarize_long_parkers(df, days_threshold):
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
     parking_days = df.copy()
-    parking_days["วันที่ตรวจพบ"] = pd.to_datetime(
-        parking_days["วันที่ตรวจพบ"], errors="coerce"
-    ).dt.date
-    parking_days["ทะเบียน_clean"] = (
-        parking_days["ทะเบียนรถ"].astype(str).str.upper().str.strip()
-        .str.replace(r"[\s\-.]", "", regex=True)
-    )
+    parking_days["วันที่ตรวจพบ"] = parking_date_series(parking_days["วันที่ตรวจพบ"]).dt.date
+    parking_days["ทะเบียน_clean"] = parking_days["ทะเบียนรถ"].fillna("").map(normalize_plate)
     parking_days["จังหวัด"] = parking_days["จังหวัด"].astype(str).str.strip()
     parking_days = parking_days.dropna(subset=["วันที่ตรวจพบ"])
+    parking_days = parking_days[parking_days["ทะเบียน_clean"].ne("")]
     parking_days = parking_days.drop_duplicates(
         subset=["วันที่ตรวจพบ", *PARKING_KEY_COLUMNS]
     )

@@ -75,6 +75,59 @@ class FrontendWorkflowTests(unittest.TestCase):
     def recording_date(self):
         return next(item for item in self.app.date_input if item.key == 'recording_date')
 
+    def test_reducing_row_count_preserves_filled_rows_until_confirmation(self):
+        self.button('เพิ่มทะเบียน').click(); self.app.run()
+        self.plates()[1].input('ขข5678'); self.app.run()
+        next(w for w in self.app.number_input if w.label=='จำนวนทะเบียนที่จะบันทึก').set_value(1)
+        self.app.run()
+        self.assertEqual(len(self.plates()),2)
+        self.assertEqual(self.plates()[1].value,'ขข5678')
+        self.button('ยืนยันลดจำนวน').click(); self.app.run()
+        self.assertEqual(len(self.plates()),1)
+
+    def test_empty_report_date_has_prompt_instead_of_exception(self):
+        next(w for w in self.app.text_input if w.label=='รหัสผ่านสำหรับโหลดรีพอร์ต:').input('1234')
+        self.app.run()
+        next(w for w in self.app.date_input if w.label=='เลือกวันที่').set_value(None)
+        self.app.run()
+        self.assertFalse(self.app.exception)
+        self.assertTrue(any('เลือกวันที่' in w.value for w in self.app.info))
+
+    def test_settings_unavailable_preserves_draft_and_shows_retry(self):
+        self.plates()[0].input('กก1234'); self.app.run()
+        st.cache_data.clear()
+        with patch.object(self.book.settings,'get',side_effect=RuntimeError('simulated settings outage')):
+            self.app.run()
+        self.assertFalse(self.app.exception)
+        self.assertTrue(any('รายชื่ออาคาร' in w.value for w in self.app.error))
+        self.app.run()
+        self.assertEqual(self.plates()[0].value,'กก1234')
+
+    def test_dashboard_sections_month_changes_and_cleared_dates(self):
+        self.book.raw.rows += [['2026-06-01','อาคาร 4','กก100','ชลบุรี'],
+                               ['2026-07-01','อาคาร 4','กก100','ชลบุรี']]
+        st.cache_data.clear()
+        self.app.switch_page('pages/dashboard.py').run()
+        for section in ['overview','period','vehicle','raw']:
+            self.app.get('segmented_control')[0].set_value(section); self.app.run()
+            if section=='period':
+                next(w for w in self.app.selectbox if w.label=='เลือกเดือน').set_value(6); self.app.run()
+                next(w for w in self.app.date_input if w.label=='เลือกวันที่').set_value(None); self.app.run()
+            elif section=='vehicle':
+                next(w for w in self.app.text_input if w.label=='ค้นหาทะเบียนรถ').input('กก'); self.app.run()
+            elif section=='raw':
+                next(w for w in self.app.date_input if w.label=='ช่วงวันที่').set_value(None); self.app.run()
+            self.assertFalse(self.app.exception)
+            self.assertFalse(self.app.error)
+
+    def test_dashboard_does_not_warn_about_supported_mixed_dates(self):
+        self.book.raw.rows += [[d,'อาคาร 4',f'กก{i}','ชลบุรี'] for i,d in enumerate(
+            ['2026-11-09','09/11/2026','2026-11-09 01:30:00',46335])]
+        st.cache_data.clear()
+        self.app.switch_page('pages/dashboard.py').run()
+        self.assertFalse(self.app.exception)
+        self.assertFalse(any('รูปแบบวันที่ไม่ถูกต้อง' in w.value for w in self.app.warning))
+
     def test_recording_date_defaults_to_bangkok_day_and_disallows_future(self):
         # 00:30 in Bangkok is still the previous UTC day.
         now = datetime(2026, 11, 2, 0, 30, tzinfo=BANGKOK)

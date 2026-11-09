@@ -7,6 +7,8 @@ import math
 from pathlib import Path
 
 import pandas as pd
+from services.parking_domain import parking_date_series, normalize_plate
+from services.export_safety import safe_csv_bytes
 
 
 REPORT_COLUMNS = [
@@ -165,7 +167,7 @@ def build_detailed_report(df, report_type, selected_date):
 
 
 def to_csv_bytes(df):
-    return df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+    return safe_csv_bytes(df)
 
 
 def to_summary_pdf_bytes(df, report_label, font_path=None, report_type=None):
@@ -399,16 +401,13 @@ def _prepare_data(df):
         raise ValueError(f"ข้อมูลขาดคอลัมน์: {', '.join(missing_columns)}")
 
     prepared = df[required_columns].copy()
-    prepared["วันที่ตรวจพบ"] = pd.to_datetime(
-        prepared["วันที่ตรวจพบ"], errors="coerce"
-    ).dt.date
-    prepared["ทะเบียนรถ"] = prepared["ทะเบียนรถ"].astype(str).str.strip()
+    prepared["วันที่ตรวจพบ"] = parking_date_series(prepared["วันที่ตรวจพบ"]).dt.date
+    prepared["ทะเบียนรถ"] = prepared["ทะเบียนรถ"].fillna("").astype(str).str.strip()
     prepared["จังหวัด"] = prepared["จังหวัด"].astype(str).str.strip()
     prepared["อาคาร"] = prepared["อาคาร"].astype(str).str.strip()
-    prepared["ทะเบียน_clean"] = (
-        prepared["ทะเบียนรถ"].str.upper().str.replace(r"[\s\-.]", "", regex=True)
-    )
-    return prepared.dropna(subset=["วันที่ตรวจพบ"])
+    prepared["ทะเบียน_clean"] = prepared["ทะเบียนรถ"].map(normalize_plate)
+    prepared = prepared.dropna(subset=["วันที่ตรวจพบ"])
+    return prepared[prepared["ทะเบียน_clean"].ne("")]
 
 
 def _as_date(value):
