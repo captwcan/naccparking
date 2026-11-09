@@ -197,6 +197,17 @@ class GoogleSheetsServiceTests(unittest.TestCase):
 
 
 class ArchiveExecutionTests(unittest.TestCase):
+    def test_stale_archive_plan_cannot_overwrite_new_source_records(self):
+        original = [HEADER, row('2026-06-01'), row('2026-07-01')]
+        sheets = FakeSheets({'RawData': original})
+        plan = build_archive_plan(original, now=NOW)
+        new_row = row('2026-07-02', plate='ขข2')
+        sheets.values['RawData'].append(new_row)
+        with self.assertRaisesRegex(RuntimeError, 'changed since'):
+            ArchiveMigration(sheets, logging.getLogger('archive-test')).execute(plan, now=NOW)
+        self.assertIn(new_row, sheets.values['RawData'])
+        self.assertEqual(sheets.replace_calls, 0)
+
     def setUp(self):
         self.logger = logging.getLogger("archive-test")
         self.logger.handlers.clear()

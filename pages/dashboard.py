@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import streamlit as st
-import pandas as pd
 
 from dashboard import components, overview, period_analysis, raw_data, vehicle_analysis
 from dashboard.data_service import clear_dashboard_cache, get_dashboard_data
 from dashboard.styles import apply_dashboard_styles
 from dashboard.theme import init_theme_state, is_dark_theme, render_theme_switch
+from services.parking_domain import parking_date_series
 
 
 st.set_page_config(
@@ -77,7 +77,7 @@ elif result.prepared.empty:
     else:
         components.render_empty("พบข้อมูลในชีท แต่รูปแบบวันที่หรือทะเบียนยังไม่พร้อมแสดงผล กรุณาติดต่อผู้ดูแล")
 else:
-    invalid_rows = int(pd.to_datetime(result.raw["วันที่ตรวจพบ"], errors="coerce").isna().sum())
+    invalid_rows = int(parking_date_series(result.raw["วันที่ตรวจพบ"]).isna().sum())
     if invalid_rows:
         st.warning(f"มี {invalid_rows} รายการที่รูปแบบวันที่ไม่ถูกต้อง จึงไม่นำมาคำนวณ")
     st.caption(f"ข้อมูลพร้อมแสดงผล {len(result.prepared):,} รายการ · รวมประวัติย้อนหลัง")

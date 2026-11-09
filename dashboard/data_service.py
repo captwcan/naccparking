@@ -11,7 +11,8 @@ import pandas as pd
 import streamlit as st
 from google.oauth2.service_account import Credentials
 from services.google_sheets_service import read_parking_values, read_all_parking_values
-from services.parking_domain import bangkok_now, vehicle_key
+from services.parking_domain import bangkok_now, vehicle_key, parking_date_series
+from services.export_safety import safe_csv_bytes
 
 
 DATE_COL = "วันที่ตรวจพบ"
@@ -261,13 +262,17 @@ def dataframe_from_sheet_values(values: list[list[object]]) -> pd.DataFrame:
 
 
 def to_csv_bytes(df: pd.DataFrame) -> bytes:
-    return df.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+    return safe_csv_bytes(df)
 
 
 def to_excel_bytes(df: pd.DataFrame) -> bytes:
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="RawData")
+        for row in writer.sheets["RawData"]:
+            for cell in row:
+                if cell.data_type == "f":
+                    cell.data_type = "s"
     return output.getvalue()
 
 
@@ -284,16 +289,7 @@ def _clean_text_series(series: pd.Series) -> pd.Series:
 
 
 def _parse_date_series(series: pd.Series) -> pd.Series:
-    as_text = series.astype(str).str.strip()
-    parsed = pd.to_datetime(series, errors="coerce")
-    slash_mask = as_text.str.match(r"^\d{1,2}/\d{1,2}/\d{2,4}$", na=False)
-    if slash_mask.any():
-        parsed.loc[slash_mask] = pd.to_datetime(
-            as_text.loc[slash_mask],
-            dayfirst=True,
-            errors="coerce",
-        )
-    return pd.Series(parsed, index=series.index)
+    return parking_date_series(series)
 
 
 def _date_gap(start_series: pd.Series, end_series: pd.Series) -> pd.Series:

@@ -100,7 +100,16 @@ def save_buildings(buildings_list):
     load_buildings.clear()
 
 
-buildings_list = load_buildings()
+try:
+    buildings_list = load_buildings()
+except Exception:
+    st.error("ไม่สามารถโหลดรายชื่ออาคารได้ชั่วคราว ข้อมูลที่กรอกยังอยู่ กรุณาลองอีกครั้ง")
+    st.button("ลองโหลดรายชื่ออาคารอีกครั้ง", on_click=load_buildings.clear)
+    # Widgets absent during an outage must not lose their pending drafts.
+    for row_id in [row["id"] for row in st.session_state.get("vehicle_rows", [])]:
+        drafts = st.session_state.setdefault("vehicle_drafts", {})
+        drafts[row_id] = {field: st.session_state.get(f"{field}_{row_id}", drafts.get(row_id, {}).get(field, "" if field == "plate" else "กรุงเทพมหานคร")) for field in ("plate", "province")}
+    st.stop()
 
 def add_row_numbers(df):
     display_df = df.reset_index(drop=True).copy()
@@ -165,6 +174,7 @@ def refresh_vehicle_count_widget():
     st.session_state.vehicle_count_widget_version += 1
 
 def add_vehicle_row():
+    st.session_state.pop("pending_vehicle_count", None)
     if len(st.session_state.vehicle_rows) >= MAX_VEHICLE_ROWS:
         st.session_state.vehicle_row_warning = f"เพิ่มได้สูงสุด {MAX_VEHICLE_ROWS} รายการ"
         return
@@ -180,6 +190,7 @@ def request_clear_vehicle_rows():
         clear_vehicle_rows()
 
 def clear_vehicle_rows():
+    st.session_state.pop("pending_vehicle_count", None)
     st.session_state.confirm_clear = False
     st.session_state.vehicle_drafts = {}
     for row in st.session_state.get("vehicle_rows", []):
@@ -191,6 +202,7 @@ def clear_vehicle_rows():
     refresh_vehicle_count_widget()
 
 def delete_vehicle_row(row_id):
+    st.session_state.pop("pending_vehicle_count", None)
     st.session_state.get("vehicle_drafts", {}).pop(row_id, None)
     rows = st.session_state.vehicle_rows
     if len(rows) <= 1:
@@ -207,6 +219,19 @@ def delete_vehicle_row(row_id):
 def sync_vehicle_count_to_target(count_key):
     target = int(st.session_state.get(count_key, 1))
     target = max(1, min(MAX_VEHICLE_ROWS, target))
+    if target < len(st.session_state.vehicle_rows) and any(st.session_state.get(f"plate_{r['id']}", "").strip() for r in st.session_state.vehicle_rows[target:]):
+        st.session_state.pending_vehicle_count = target
+        refresh_vehicle_count_widget()
+        return
+    resize_vehicle_rows(target)
+
+
+def confirm_vehicle_count_reduction():
+    resize_vehicle_rows(st.session_state.pop("pending_vehicle_count"))
+
+
+def resize_vehicle_rows(target):
+    st.session_state.pop("pending_vehicle_count", None)
     while len(st.session_state.vehicle_rows) < target:
         row_id = st.session_state.next_vehicle_id
         st.session_state.vehicle_rows.append({"id": row_id})
@@ -531,6 +556,11 @@ with st.container(key="parking_workspace"):
         with clear_col:
             st.button("ล้างรายการ", width="stretch", on_click=request_clear_vehicle_rows)
 
+    if "pending_vehicle_count" in st.session_state:
+        st.warning(f"ลดเหลือ {st.session_state.pending_vehicle_count} แถวจะลบทะเบียนที่กรอกไว้ในแถวท้าย กรุณายืนยันก่อน")
+        st.button("ยืนยันลดจำนวน", on_click=confirm_vehicle_count_reduction)
+        st.button("เก็บจำนวนเดิม", on_click=lambda: st.session_state.pop("pending_vehicle_count", None))
+
     if st.session_state.get("vehicle_row_warning"):
         st.warning(st.session_state.pop("vehicle_row_warning"))
 
@@ -698,6 +728,9 @@ with st.container(key="parking_workspace"):
         if report_pwd == "1234":
             report_type = st.selectbox("ประเภทรายงาน", ["รายวัน", "รายสัปดาห์", "รายเดือน"])
             report_date = select_report_date(report_type)
+            if report_date is None:
+                st.info("กรุณาเลือกวันที่สำหรับรายงาน")
+                st.stop()
             _, _, report_period_label = get_report_period(report_type, report_date)
             st.caption(f"ช่วงรายงาน: {report_period_label}")
             report_font_options = get_report_font_options()

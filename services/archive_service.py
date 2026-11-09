@@ -8,18 +8,13 @@ from typing import Iterable
 from zoneinfo import ZoneInfo
 
 from services.google_sheets_service import GoogleSheetsService
+from services.parking_domain import parse_parking_datetime, SUPPORTED_DATE_FORMATS
 
 
 BANGKOK = ZoneInfo("Asia/Bangkok")
 SOURCE_SHEET = "RawData"
 DATE_COLUMN = 0
 IDENTITY_COLUMNS = (0, 1, 2, 3)
-SUPPORTED_DATE_FORMATS = (
-    "%d/%m/%Y",
-    "%d/%m/%Y %H:%M:%S",
-    "%Y-%m-%d",
-    "%Y-%m-%d %H:%M:%S",
-)
 
 
 @dataclass(frozen=True)
@@ -70,31 +65,6 @@ def first_day_of_current_month(now: datetime | None = None) -> date:
 
 def archive_sheet_name(value: date | datetime) -> str:
     return f"Archive_{value.year:04d}_{value.month:02d}"
-
-
-def parse_parking_datetime(value: object) -> datetime | None:
-    if isinstance(value, datetime):
-        parsed = value
-    elif isinstance(value, date):
-        parsed = datetime(value.year, value.month, value.day)
-    elif isinstance(value, (int, float)) and not isinstance(value, bool):
-        parsed = datetime(1899, 12, 30) + timedelta(days=float(value))
-    else:
-        text = str(value).strip() if value is not None else ""
-        if not text:
-            return None
-        parsed = None
-        for date_format in SUPPORTED_DATE_FORMATS:
-            try:
-                parsed = datetime.strptime(text, date_format)
-                break
-            except ValueError:
-                continue
-        if parsed is None:
-            return None
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=BANGKOK)
-    return parsed.astimezone(BANGKOK)
 
 
 def build_archive_plan(
@@ -203,6 +173,10 @@ class ArchiveMigration:
 
     def execute(self, plan: ArchivePlan, *, now: datetime | None = None) -> MigrationResult:
         now = (now or bangkok_now()).astimezone(BANGKOK)
+        current = build_archive_plan(self.sheets.read_worksheets([SOURCE_SHEET])[SOURCE_SHEET], now=now)
+        source_cells = lambda rows: [tuple(r[:4]) + (r[13] if len(r)>13 else "",) for r in rows]
+        if current.header[:4] != plan.header[:4] or source_cells(current.original_body) != source_cells(plan.original_body):
+            raise RuntimeError("RawData changed since archive plan; rebuild the plan before any writes")
         backup_name = f"Backup_RawData_{now:%Y%m%d_%H%M%S}"
         self.sheets.create_backup(SOURCE_SHEET, backup_name)
         self.logger.info("Backup created: %s", backup_name)

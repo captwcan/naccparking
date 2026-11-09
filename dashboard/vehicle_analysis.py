@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
+from html import escape
 
 from dashboard import components
 from dashboard.data_service import (
@@ -63,8 +64,8 @@ def _render_profile(profile: dict[str, object]) -> None:
                 f"""
 <div class="dash-card">
     <div class="dash-kpi-label">{label}</div>
-    <div class="dash-kpi-value">{value}</div>
-    <div class="dash-kpi-note">{note}</div>
+    <div class="dash-kpi-value">{escape(str(value))}</div>
+    <div class="dash-kpi-note">{escape(str(note))}</div>
 </div>
 """,
                 unsafe_allow_html=True,
@@ -80,9 +81,9 @@ def _render_timeline(history: pd.DataFrame) -> None:
         st.markdown(
             f"""
 <div class="dash-timeline-item">
-    <strong>{_format_date(row[DATE_COL])}</strong> · {row.get(PLATE_COL, "")}
-    <div class="dash-timeline-meta">{row.get(BUILDING_COL, "-")} · {row.get(PROVINCE_COL, "-")} · {marker}</div>
-    <div class="dash-timeline-meta">{reason}</div>
+    <strong>{_format_date(row[DATE_COL])}</strong> · {escape(str(row.get(PLATE_COL, "")))}
+    <div class="dash-timeline-meta">{escape(str(row.get(BUILDING_COL, "-")))} · {escape(str(row.get(PROVINCE_COL, "-")))} · {marker}</div>
+    <div class="dash-timeline-meta">{escape(str(reason))}</div>
 </div>
 """,
             unsafe_allow_html=True,

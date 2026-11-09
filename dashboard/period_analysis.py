@@ -58,6 +58,9 @@ def _render_daily(df: pd.DataFrame) -> None:
         max_value=date(year, month, pd.Period(f"{year}-{month:02d}").days_in_month),
         key="daily_selected_date",
     )
+    if selected_date is None:
+        components.render_empty("กรุณาเลือกวันที่สำหรับรายงาน")
+        return
     day_df = filter_dataframe(month_df, date_range=(selected_date, selected_date))
     if day_df.empty:
         components.render_empty()
