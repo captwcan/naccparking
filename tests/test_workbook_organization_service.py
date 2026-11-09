@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import unittest
+import logging
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from services.workbook_organization_service import (
     _formulas_equivalent,
@@ -10,6 +13,7 @@ from services.workbook_organization_service import (
     combined_summary_formula,
     monthly_summary_formula,
     verify_combined_values,
+    WorkbookOrganizer,
 )
 
 
@@ -20,6 +24,33 @@ class Worksheet:
 
 
 class WorkbookOrganizationTests(unittest.TestCase):
+    def load_backdated_plan(self, archived):
+        class Book:
+            def worksheets(self):
+                return [Worksheet(t, i+1) for i,t in enumerate([*VISIBLE_SHEETS, 'RawData', *archived])]
+
+            def values_batch_get(self, ranges, params=None):
+                if all(r.endswith('!A2:F') for r in ranges):
+                    rows = {'RawData': [['2026-11-09','อาคาร 4','กก1','กรุงเทพมหานคร','กก1','กก1|กรุงเทพมหานคร']], **archived}
+                    return {'valueRanges': [{'values': rows[r.split('!')[0].strip("'")]} for r in ranges]}
+                return {'valueRanges': [{'values': [[46327]]}, {'values': [['ทั้งหมด']]}, {'values': []}, {'values': []}]}
+
+            def fetch_sheet_metadata(self, params=None):
+                return {'sheets': [{'properties': {'title':w.title,'sheetId':w.id,'index':i,'hidden':w.title not in VISIBLE_SHEETS}} for i,w in enumerate(self.worksheets())]}
+        return WorkbookOrganizer(Book(),logging.getLogger('test')).load_plan(now=datetime(2026,12,1,tzinfo=ZoneInfo('Asia/Bangkok')))
+
+    def test_unarchived_historical_month_remains_selectable_after_rollover(self):
+        plan=self.load_backdated_plan({})
+        self.assertIn(date(2026,11,1),plan.months)
+        self.assertEqual(plan.selected_month,date(2026,11,1))
+        self.assertEqual(plan.month_stats[date(2026,11,1)].last_date,date(2026,11,9))
+
+    def test_month_stats_include_late_raw_rows_alongside_archived_month(self):
+        plan=self.load_backdated_plan({'Archive_2026_11': [['2026-11-08','อาคาร 4','กก1','กรุงเทพมหานคร','กก1','กก1|กรุงเทพมหานคร']]})
+        stats=plan.month_stats[date(2026,11,1)]
+        self.assertEqual(stats.last_date,date(2026,11,9))
+        self.assertEqual(len(stats.days_by_key['กก1|กรุงเทพมหานคร']),2)
+
     def test_combined_stats_uses_plate_and_province_key(self):
         values = {
             "Archive_2026_06": [

@@ -173,15 +173,10 @@ def monthly_summary_formula() -> str:
     return (
         "=IFERROR(LET(monthStart,DATE(YEAR($B$1),MONTH($B$1),1),"
         "monthEnd,EOMONTH(monthStart,0),"
-        'sourceName,IF(monthStart=$Q$1,"RawData","Archive_"&TEXT(monthStart,"yyyy_mm")),'
-        'sourceA,INDIRECT("\'"&sourceName&"\'!A2:A"),'
-        'sourceB,INDIRECT("\'"&sourceName&"\'!B2:B"),'
-        'sourceC,INDIRECT("\'"&sourceName&"\'!C2:C"),'
-        'sourceD,INDIRECT("\'"&sourceName&"\'!D2:D"),'
-        'sourceF,INDIRECT("\'"&sourceName&"\'!F2:F"),'
-        "dates,ARRAYFORMULA(IFERROR(DATEVALUE(sourceA),sourceA)),"
-        "valid,FILTER({dates,ARRAYFORMULA(TRIM(TO_TEXT(sourceB))),sourceC,sourceD,sourceF},"
-        'dates>=monthStart,dates<=monthEnd,sourceA<>"",sourceF<>""),'
+        "dates,ReportData!M2:M,"
+        "valid,FILTER({dates,ARRAYFORMULA(TRIM(TO_TEXT(ReportData!B2:B))),"
+        "ReportData!C2:C,ReportData!D2:D,ReportData!F2:F},"
+        'dates>=monthStart,dates<=monthEnd,ReportData!F2:F<>""),'
         "vDates,INDEX(valid,,1),vBuildings,INDEX(valid,,2),vPlates,INDEX(valid,,3),"
         "vProvinces,INDEX(valid,,4),vKeys,INDEX(valid,,5),"
         "firstDate,MIN(vDates),lastDate,MAX(vDates),periodDays,lastDate-firstDate+1,"
@@ -209,9 +204,7 @@ def first_or_last_date_formula(function_name: str) -> str:
         raise ValueError("function_name must be MIN or MAX")
     return (
         "=IFERROR(LET(monthStart,DATE(YEAR($B$1),MONTH($B$1),1),"
-        'sourceName,IF(monthStart=$Q$1,"RawData","Archive_"&TEXT(monthStart,"yyyy_mm")),'
-        'rawDates,INDIRECT("\'"&sourceName&"\'!A2:A"),'
-        'dates,FILTER(ARRAYFORMULA(IFERROR(DATEVALUE(rawDates),rawDates)),rawDates<>""),'
+        'dates,FILTER(ReportData!M2:M,ReportData!M2:M<>""),'
         f'{function_name}(FILTER(dates,dates>=monthStart,dates<=EOMONTH(monthStart,0)))),"")'
     )
 
@@ -220,10 +213,8 @@ def build_summary_update_requests(
     car_sheet_id: int,
     monthly_sheet_id: int,
     *,
-    current_month: date,
     selected_month: date,
     display_mode: str,
-    months: tuple[date, ...],
     source_names: tuple[str, ...],
     metadata: dict[str, object],
 ) -> list[dict[str, object]]:
@@ -317,7 +308,7 @@ def build_summary_update_requests(
             _single_cell_request(
                 monthly_sheet_id, 3, 0, formula=monthly_summary_formula()
             ),
-            _month_options_request(monthly_sheet_id, current_month, months),
+            _month_options_request(monthly_sheet_id),
             _month_validation_request(monthly_sheet_id),
             _display_mode_validation_request(monthly_sheet_id),
             _sheet_grid_request(car_sheet_id, frozen_rows=1),
@@ -516,11 +507,19 @@ class WorkbookOrganizer:
             name: ranges[index].get("values", []) if index < len(ranges) else []
             for index, name in enumerate(source_names)
         }
+        # Backdated rows can remain in RawData after their month is archived.
+        # The live monthly view reads the union, so planning must do so too.
+        all_rows = [row for rows in values_by_sheet.values() for row in rows]
+        observed_months = {
+            parsed.date().replace(day=1)
+            for row in all_rows if row and (parsed := parse_parking_datetime(row[0]))
+        }
+        months = tuple(sorted(set(months) | observed_months, reverse=True))
         month_stats = {
             month: build_month_stats(
                 month,
                 source_sheet_for_month(month, current_month),
-                values_by_sheet[source_sheet_for_month(month, current_month)],
+                all_rows,
             )
             for month in months
         }
@@ -633,10 +632,8 @@ class WorkbookOrganizer:
             requests = build_summary_update_requests(
                 car_sheet.id,
                 monthly_sheet.id,
-                current_month=plan.current_month,
                 selected_month=plan.selected_month,
                 display_mode=plan.display_mode,
-                months=plan.months,
                 source_names=plan.source_names,
                 metadata=metadata,
             )
@@ -883,16 +880,15 @@ def _single_cell_request(
     }
 
 
-def _month_options_request(
-    sheet_id: int, current_month: date, months: tuple[date, ...]
-) -> dict[str, object]:
-    rows = [
-        {"values": [{"userEnteredValue": {"numberValue": _date_serial(current_month)}}]}
-    ]
-    rows.extend(
-        {"values": [{"userEnteredValue": {"numberValue": _date_serial(month)}}]}
-        for month in months
+def _month_options_request(sheet_id: int) -> dict[str, object]:
+    month_list = (
+        '=IFNA(SORT(UNIQUE(ARRAYFORMULA(EOMONTH('
+        'FILTER(ReportData!M2:M,ReportData!M2:M<>""),-1)+1)),1,FALSE),"")'
     )
+    rows = [
+        {"values": [{"userEnteredValue": {"formulaValue": "=DATE(YEAR(TODAY()),MONTH(TODAY()),1)"}}]},
+        {"values": [{"userEnteredValue": {"formulaValue": month_list}}]},
+    ]
     rows.extend({"values": [{}]} for _ in range(MONTHLY_ROWS - len(rows)))
     return {
         "updateCells": {
