@@ -43,6 +43,16 @@ def main() -> int:
     try:
         spreadsheet = connect_spreadsheet()
         repair = MonthlyRankingRepair(spreadsheet, logger)
+        if not args.rollback:
+            anchor = spreadsheet.worksheet("MonthlyRanking").acell(
+                "A4", value_render_option="FORMULA"
+            ).value
+            if "ReportData!" in (anchor or ""):
+                logger.info(
+                    "MonthlyRanking uses ReportData. Use scripts/organize_workbook.py "
+                    "to inspect or repair this workbook."
+                )
+                return 0 if args.dry_run else 1
         if args.rollback:
             if not args.yes and not confirm(
                 f"Restore MonthlyRanking from {args.rollback}?"

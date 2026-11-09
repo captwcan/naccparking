@@ -34,6 +34,7 @@ VISIBLE_SHEETS = (
 MONTHLY_ROWS = 1000
 CAR_SUMMARY_ROWS = 8056
 MONTH_OPTIONS_COLUMN = 16  # Q, zero based
+SELECTED_MONTH_START = "EOMONTH(IF(ISNUMBER($B$1),$B$1,IF(ISNUMBER($Q$2),$Q$2,$Q$1)),-1)+1"
 
 
 @dataclass(frozen=True)
@@ -61,7 +62,7 @@ class CombinedStats:
 @dataclass(frozen=True)
 class WorkbookOrganizationPlan:
     current_month: date
-    selected_month: date
+    selected_month: date | None
     display_mode: str
     months: tuple[date, ...]
     source_names: tuple[str, ...]
@@ -171,7 +172,7 @@ def combined_summary_formula(source_names: Iterable[str]) -> str:
 
 def monthly_summary_formula() -> str:
     return (
-        "=IFERROR(LET(monthStart,DATE(YEAR($B$1),MONTH($B$1),1),"
+        f"=IFERROR(LET(monthStart,{SELECTED_MONTH_START},"
         "monthEnd,EOMONTH(monthStart,0),"
         "dates,ReportData!M2:M,"
         "valid,FILTER({dates,ARRAYFORMULA(TRIM(TO_TEXT(ReportData!B2:B))),"
@@ -203,7 +204,7 @@ def first_or_last_date_formula(function_name: str) -> str:
     if function_name not in {"MIN", "MAX"}:
         raise ValueError("function_name must be MIN or MAX")
     return (
-        "=IFERROR(LET(monthStart,DATE(YEAR($B$1),MONTH($B$1),1),"
+        f"=IFERROR(LET(monthStart,{SELECTED_MONTH_START},"
         'dates,FILTER(ReportData!M2:M,ReportData!M2:M<>""),'
         f'{function_name}(FILTER(dates,dates>=monthStart,dates<=EOMONTH(monthStart,0)))),"")'
     )
@@ -213,7 +214,7 @@ def build_summary_update_requests(
     car_sheet_id: int,
     monthly_sheet_id: int,
     *,
-    selected_month: date,
+    selected_month: date | None,
     display_mode: str,
     source_names: tuple[str, ...],
     metadata: dict[str, object],
@@ -254,7 +255,8 @@ def build_summary_update_requests(
             ),
             _single_cell_request(monthly_sheet_id, 0, 0, text="เลือกเดือน"),
             _single_cell_request(
-                monthly_sheet_id, 0, 1, number=_date_serial(selected_month)
+                monthly_sheet_id, 0, 1,
+                number=_date_serial(selected_month) if selected_month else None,
             ),
             _single_cell_request(monthly_sheet_id, 0, 2, text="# เดือนนี้เริ่มบันทึก"),
             _single_cell_request(
@@ -278,12 +280,12 @@ def build_summary_update_requests(
                 formula='=IF(OR(D1="",F1=""),"",F1-D1+1)',
             ),
             _single_cell_request(monthly_sheet_id, 0, 8, text="วัน"),
-            _single_cell_request(monthly_sheet_id, 0, 9, text="| 80% ="),
+            _single_cell_request(monthly_sheet_id, 0, 9, text="| เกิน 80% ="),
             _single_cell_request(
                 monthly_sheet_id,
                 0,
                 10,
-                formula='=IF(H1="","",ROUNDUP(H1*80%,0))',
+                formula='=IF(H1="","",INT(H1*80%)+1)',
             ),
             _single_cell_request(monthly_sheet_id, 0, 11, text="วันขึ้นไป"),
             _single_cell_request(monthly_sheet_id, 1, 0, text="แสดง"),
@@ -542,7 +544,7 @@ class WorkbookOrganizer:
         selected_month = (
             selected_parsed.date().replace(day=1)
             if selected_parsed and selected_parsed.date().replace(day=1) in months
-            else current_month
+            else None
         )
         display_mode = str(_first_value(controls, 1)).strip()
         if display_mode not in {"ทั้งหมด", "เฉพาะเกิน 80%"}:
@@ -739,11 +741,13 @@ class WorkbookOrganizer:
         payload = json.dumps(values, ensure_ascii=False, separators=(",", ":"))
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    def _set_selected_month(self, sheet_id: int, month: date) -> None:
+    def _set_selected_month(self, sheet_id: int, month: date | None) -> None:
         self.spreadsheet.batch_update(
             {
                 "requests": [
-                    _single_cell_request(sheet_id, 0, 1, number=_date_serial(month))
+                    _single_cell_request(
+                        sheet_id, 0, 1, number=_date_serial(month) if month else None
+                    )
                 ]
             }
         )
@@ -869,12 +873,14 @@ def _single_cell_request(
         value = {"formulaValue": formula}
     elif text is not None:
         value = {"stringValue": text}
-    else:
+    elif number is not None:
         value = {"numberValue": number}
+    else:
+        value = None
     return {
         "updateCells": {
             "start": {"sheetId": sheet_id, "rowIndex": row, "columnIndex": column},
-            "rows": [{"values": [{"userEnteredValue": value}]}],
+            "rows": [{"values": [{"userEnteredValue": value} if value is not None else {}]}],
             "fields": "userEnteredValue",
         }
     }
