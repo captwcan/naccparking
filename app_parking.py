@@ -29,6 +29,7 @@ from services.google_sheets_service import (
     read_all_parking_values,
     read_buildings,
     write_buildings,
+    ParkingHTTPClient,
 )
 
 # การตั้งค่าหน้าจอเบื้องต้น
@@ -55,7 +56,7 @@ def init_connection():
     creds = Credentials.from_service_account_info(
         st.secrets["gcp_service_account"], scopes=scopes
     )
-    client = gspread.authorize(creds)
+    client = gspread.authorize(creds, http_client=ParkingHTTPClient)
 
     if "spreadsheet_url" not in st.secrets:
         st.error("❌ ไม่พบข้อมูล spreadsheet_url ใน st.secrets")
@@ -89,12 +90,14 @@ def load_data():
 
 BUILDINGS_FILE = Path(__file__).resolve().with_name("buildings.json")
 
+@st.cache_data(ttl=300, show_spinner=False)
 def load_buildings():
     defaults = json.loads(BUILDINGS_FILE.read_text(encoding="utf-8"))
     return read_buildings(init_connection().spreadsheet, defaults)
 
 def save_buildings(buildings_list):
     write_buildings(init_connection().spreadsheet, buildings_list)
+    load_buildings.clear()
 
 
 buildings_list = load_buildings()
@@ -450,6 +453,8 @@ if 'last_saved_batch' not in st.session_state:
 if 'last_saved_rows' not in st.session_state:
     st.session_state.last_saved_rows = []
 
+if st.session_state.pop("reset_draft_after_save", False):
+    clear_vehicle_rows()
 init_vehicle_rows()
 
 # ---- HEADER ----
@@ -585,7 +590,7 @@ with st.container(key="parking_workspace"):
     if duplicate_ids:
         st.caption("แก้ทะเบียนและจังหวัดที่ซ้ำกันก่อนบันทึก")
     elif not entries_preview:
-        st.caption("กรอกทะเบียนอย่างน้อย 1 รายการเพื่อเปิดปุ่มบันทึก")
+        st.caption("กรอกทะเบียนอย่างน้อย 1 รายการ แล้วกดบันทึก")
     else:
         if valid_recording_date:
             st.caption(f"พร้อมบันทึก {len(entries_preview)} รายการ · {building} · {recording_date:%d/%m/%Y}")
@@ -594,7 +599,7 @@ with st.container(key="parking_workspace"):
     btn_col2 = st.container(key="parking_save_action")
 
     with btn_col2:
-        if st.button("บันทึกข้อมูลเข้าสู่ระบบ", icon=":material/check:", type="primary", width="stretch", disabled=bool(duplicate_ids) or not building or not entries_preview or not valid_recording_date):
+        if st.button("บันทึกข้อมูลเข้าสู่ระบบ", icon=":material/check:", type="primary", width="stretch", disabled=not building or not valid_recording_date):
             entries, skipped_count = collect_vehicle_entries()
             if not building:
                 st.error("❌ กรุณาเลือกอาคารก่อนบันทึกข้อมูลครับ")
@@ -642,6 +647,7 @@ with st.container(key="parking_workspace"):
                         st.session_state.last_saved_plate = entries[-1]["plate"]
                         st.session_state.last_saved_province = entries[-1]["province"]
                         st.session_state.last_saved_row = saved_rows[-1] if saved_rows else None
+                        st.session_state.reset_draft_after_save = True
 
                         st.success(f"บันทึกสำเร็จ {len(rows_to_append)} รายการ · {building} · {recording_date:%d/%m/%Y}")
                         st.info("รายการที่บันทึก:\n" + format_vehicle_list(entries))

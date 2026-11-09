@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 import threading
 import uuid
+import random
+import time
+from requests.exceptions import ConnectionError, Timeout
 from services.parking_domain import vehicle_key
 import os
 from dataclasses import dataclass
@@ -16,6 +19,21 @@ from google.oauth2.service_account import Credentials
 
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 PARKING_INPUT_RANGE = "A1:D"
+TRANSIENT_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+class ParkingHTTPClient(gspread.HTTPClient):
+    """Retry transient reads only; a lost write response must be reconciled by ID."""
+
+    def request(self, method, endpoint, *args, **kwargs):
+        for attempt in range(4):
+            try:
+                return super().request(method, endpoint, *args, **kwargs)
+            except (gspread.exceptions.APIError, ConnectionError, Timeout) as error:
+                transient = not isinstance(error, gspread.exceptions.APIError) or error.response.status_code in TRANSIENT_STATUS_CODES
+                if method.lower() != "get" or not transient or attempt == 3:
+                    raise
+                time.sleep(2 ** attempt + random.random())
 
 
 @dataclass(frozen=True)
@@ -59,7 +77,7 @@ def connect_spreadsheet(settings: GoogleSheetsSettings | None = None):
         settings.service_account_info,
         scopes=[SHEETS_SCOPE],
     )
-    return gspread.authorize(credentials).open_by_url(settings.spreadsheet_url)
+    return gspread.authorize(credentials, http_client=ParkingHTTPClient).open_by_url(settings.spreadsheet_url)
 
 
 def read_parking_values(worksheet) -> list[list[object]]:
@@ -102,7 +120,23 @@ def append_parking_rows(worksheet, rows):
             for column, values in [(0, row[:4]), (13, [record_id])]:
                 requests.append({"updateCells": {"start": {"sheetId": worksheet.id, "rowIndex": last + offset, "columnIndex": column}, "rows": [{"values": [{"userEnteredValue": _user_entered_value(v)} for v in values]}], "fields": "userEnteredValue"}})
         if requests:
-            worksheet.spreadsheet.batch_update({"requests": requests})
+            try:
+                worksheet.spreadsheet.batch_update({"requests": requests})
+            except (gspread.exceptions.APIError, ConnectionError, Timeout) as error:
+                if isinstance(error, gspread.exceptions.APIError) and error.response.status_code not in TRANSIENT_STATUS_CODES:
+                    raise
+                # Google can commit the atomic batch before its response is lost.
+                # Never replay that write or replace it with another batch of IDs.
+                try:
+                    actual = read_source_with_ids(worksheet)
+                    committed = all(
+                        sum(len(r) > 13 and r[13] == record_id and r[:4] == row[:4] for r in actual[1:]) == 1
+                        for row, record_id in zip(rows, ids)
+                    )
+                except Exception:
+                    raise error
+                if not committed:
+                    raise error
         return {"updates": {"updatedRange": f"'{worksheet.title}'!A{last+1}:D{last+len(rows)}"}, "record_ids": ids}
 
 

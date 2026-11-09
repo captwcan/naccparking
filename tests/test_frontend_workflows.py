@@ -28,6 +28,50 @@ class FrontendWorkflowTests(unittest.TestCase):
     def plates(self):
         return [item for item in self.app.text_input if item.label == 'ทะเบียนรถยนต์']
 
+    def test_forty_row_entry_does_not_exhaust_shared_read_quota(self):
+        from gspread.exceptions import APIError
+        from requests import Response
+        response = Response()
+        response.status_code = 429
+        response._content = b'{"error":{"code":429,"message":"Read requests per minute per user exceeded"}}'
+        original_get = self.book.settings.get
+        reads = 0
+        def limited_get(*args, **kwargs):
+            nonlocal reads
+            reads += 1
+            if reads > 59:
+                raise APIError(response)
+            return original_get(*args, **kwargs)
+        with patch.object(self.book.settings, 'get', side_effect=limited_get):
+            next(w for w in self.app.number_input if w.label == 'จำนวนทะเบียนที่จะบันทึก').set_value(40)
+            self.app.run(timeout=30)
+            for i in range(40):
+                self.plates()[i].input(f'กก{1000+i}'); self.app.run(timeout=30)
+                if i < 20:
+                    [w for w in self.app.selectbox if w.label == 'จังหวัด'][i].set_value('ชลบุรี')
+                    self.app.run(timeout=30)
+                self.assertFalse(self.app.exception)
+            self.button('บันทึกข้อมูลเข้าสู่ระบบ').click(); self.app.run(timeout=30)
+        self.assertFalse(self.app.exception)
+        self.assertFalse(self.app.error)
+        self.assertEqual(len(self.app.session_state.last_saved_batch), 40)
+        self.assertLessEqual(reads, 2)
+
+    def test_save_recovers_when_google_commits_but_response_is_lost(self):
+        from requests.exceptions import Timeout
+        original_update = self.book.batch_update
+        def commit_then_timeout(body):
+            original_update(body)
+            raise Timeout('simulated lost response after commit')
+        self.plates()[0].input('กก1234'); self.app.run()
+        with patch.object(self.book, 'batch_update', side_effect=commit_then_timeout) as write:
+            self.button('บันทึกข้อมูลเข้าสู่ระบบ').click(); self.app.run()
+        self.assertFalse(self.app.exception)
+        self.assertFalse(self.app.error)
+        self.assertEqual(len(self.app.session_state.last_saved_batch), 1)
+        self.assertEqual(write.call_count, 1)
+        self.assertEqual(sum(r[2] == 'กก1234' for r in self.book.raw.rows if len(r) >= 4), 1)
+
     def recording_date(self):
         return next(item for item in self.app.date_input if item.key == 'recording_date')
 
@@ -151,18 +195,42 @@ class FrontendWorkflowTests(unittest.TestCase):
         self.assertEqual(self.plates()[0].value, 'กก1234')
         self.assertFalse(self.app.exception)
 
-    def test_duplicate_variants_disable_save(self):
+    def test_duplicate_variants_are_rejected_on_submit(self):
         self.plates()[0].input('กก1234'); self.app.run()
         self.button('เพิ่มทะเบียน').click(); self.app.run()
         self.plates()[1].input('กก- 1234'); self.app.run()
-        self.assertTrue(self.button('บันทึกข้อมูลเข้าสู่ระบบ').disabled)
+        before = [list(row) for row in self.book.raw.rows]
+        self.button('บันทึกข้อมูลเข้าสู่ระบบ').click(); self.app.run()
+        self.assertEqual(self.book.raw.rows, before)
         self.assertTrue(any('ซ้ำ' in warning.value for warning in self.app.warning))
 
     def test_blank_input_cannot_submit(self):
-        self.assertTrue(self.button('บันทึกข้อมูลเข้าสู่ระบบ').disabled)
+        before = [list(row) for row in self.book.raw.rows]
+        self.button('บันทึกข้อมูลเข้าสู่ระบบ').click(); self.app.run()
+        self.assertEqual(self.book.raw.rows, before)
+        self.assertTrue(any('กรุณากรอกทะเบียน' in w.value for w in self.app.error))
+
+    def test_success_starts_fresh_draft_without_resubmitting_previous_batch(self):
+        self.plates()[0].input('กก1234'); self.app.run()
+        self.button('บันทึกข้อมูลเข้าสู่ระบบ').click(); self.app.run()
+        self.assertEqual(self.plates()[0].value, '')
+        self.assertEqual(len(self.app.session_state.last_saved_batch), 1)
+        self.plates()[0].input('ขข5678'); self.app.run()
+        self.button('บันทึกข้อมูลเข้าสู่ระบบ').click(); self.app.run()
+        actual = [r[2] for r in self.book.raw.rows[1:] if len(r) >= 4 and r[0]]
+        self.assertEqual(actual, ['กก1234', 'ขข5678'])
+        self.assertEqual(self.app.session_state.last_saved_batch[0]['plate'], 'ขข5678')
+        self.assertFalse(self.app.error)
+
+    def test_admin_building_change_is_visible_without_waiting_for_cache(self):
+        next(w for w in self.app.text_input if w.label == 'ชื่ออาคารใหม่:').input('อาคารทดสอบ')
+        self.button('➕ เพิ่มอาคาร').click(); self.app.run()
+        self.assertIn('อาคารทดสอบ', next(w for w in self.app.selectbox if w.label == 'อาคาร (Building)').options)
+        self.assertFalse(self.app.exception)
 
     def test_draft_and_building_survive_visiting_dashboard(self):
         self.book.settings.rows.append(['อาคาร 8'])
+        st.cache_data.clear()  # Simulate the external settings cache expiring.
         self.app.run()
         next(w for w in self.app.selectbox if w.label == 'อาคาร (Building)').set_value('อาคาร 8')
         self.plates()[0].input('กก1234')
